@@ -1,0 +1,16 @@
+/* admin form */
+
+/*fieldset.collapsible {width:99%}*/
+
+table.blink_servers div.form-item, table.blink_local_goals div.form-item {margin: 5px !important;}
+table.blink_servers th, table.blink_local_goals th {border:0; padding:0; background-color: #999; border-bottom: 2px solid #777; color: white; font-size: 14px;}
+table.blink_servers tbody tr td, table.blink_local_goals tbody tr td {border-bottom:1px solid #aaa !important;}
+table.blink_servers tbody tr td, table.blink_local_goals tbody tr td {background: #f9f9f9 !important;}
+table.blink_servers tbody tr.alt td, table.blink_local_goals tbody tr.alt td {background: #dcdcdc !important;}
+
+table.blink_local_goals, table.blink_servers {width:100%} 
+ 
+
+/* blink report */
+ul.goals li {list-style-position: outside !important; padding:0 !important; padding-left:20px !important; margin-left:0px !important;}
+

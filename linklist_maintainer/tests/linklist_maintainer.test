@@ -1,0 +1,475 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ *
+ *
+ */
+
+class LinklistMaintainerTestCase extends DrupalWebTestCase {
+
+  /**
+   * Implementation of getInfo().
+   */
+  function getInfo() {
+    return array(
+      'name' => 'Linklist maintainer tests',
+      'description' => 'test functionality of linklist maintainer module',
+      'group' => 'Linklist'
+    );
+  }
+
+  var $superUser, $adminUser, $normalUser = NULL;
+  var $maintainer, $p1, $p2, $p3, $p4, $p5 = NULL;
+  var $siteBase = NULL;
+  var $pversion = 1.01;
+  var $genericPost = 'Generic Post';
+  var $testPost = "This is a test post by someone.  It works as an
+      <a href='http://example.com/an-interesting-text-of-sorts.html'>interesting text</a>
+      because it has some interesting text in it and uses a few keywords that we want to link to other pages.";
+  var $testPost2 = "This is a second test Post.  It is not nearly as interesting textually, but it has capitalization,
+      and some tests that are nonexistent.  Text across sentence boundaries is hard to come by.";
+  var $testPost3 = "A test for links within links.";
+
+  function setUp() {
+
+    parent::setUp('linklist_maintainer', 'blink');
+
+    $this->superUser = $this->drupalCreateUser(array('access content', 'administer linklist', 'administer linklist participants'));
+    $this->adminUser = $this->drupalCreateUser(array('access content', 'view linklist reports'));
+    $this->normalUser = $this->drupalCreateUser(array('access content'));
+    $this->drupalLogin($this->superUser);
+    $this->drupalCreateNode(array('title' => 'All About Test Post', 'body' => $this->genericPost));
+    $this->drupalCreateNode(array('title' => 'All About Nonexistent Text', 'body' => $this->genericPost));
+    $this->drupalCreateNode(array('title' => 'Interesting Test Post', 'body' => $this->testPost));
+    $this->drupalCreateNode(array('title' => 'Uninteresting Test Post', 'body' => $this->testPost2));
+    $this->drupalCreateNode(array('title' => 'Links within links', 'body' => $this->testPost3));
+    // TIME: pretend that all link goals were created 1 minute ago
+    $updatetime = strtotime('-1 minute');
+    $kws[] = array('goal_uid' => 'G1', 'kw' => 'test post', 'url' => 'node/1', 'weight' => 5, 'adj_weight' => 5, 'ldate' => $updatetime);
+    $kws[] = array('goal_uid' => 'G2', 'kw' => 'interesting text', 'url' => 'http://example.com', 'weight' => 5, 'adj_weight' => 5, 'ldate' => $updatetime);
+    $kws[] = array('goal_uid' => 'G3', 'kw' => 'nonexistent text', 'url' => 'node/2', 'weight' => 5, 'adj_weight' => 5, 'ldate' => $updatetime);
+    $kws[] = array('goal_uid' => 'G4', 'kw' => 'few kws', 'url' => 'node/1', 'weight' => 0, 'adj_weight' => 0, 'ldate' => $updatetime);
+    foreach ($kws as $kw) {
+      drupal_write_record('linklist_maintainer_goals', $kw);
+    }
+
+    $ip = ip_address();
+
+    for ($i = 1; $i < 4; $i++) {
+      $p[$i] = array(
+        'server' => "http://participant$i.loc",
+        'pkey' => uniqid('T', TRUE),
+        'email' => "admin@participant$i.loc",
+        'ip' => serialize(array($ip)),
+        'pdate' => time(),
+        'approved' => TRUE,
+        'blocked' => $i == 2,
+        'banned' => $i == 3,
+        'updated' => time(),
+      );
+      drupal_write_record('linklist_maintainer_participants', $p[$i]);
+    }
+    $this->p1 = db_fetch_object(db_query("SELECT * FROM {linklist_maintainer_participants} WHERE server = 'http://participant1.loc'"));
+    $this->p2 = db_fetch_object(db_query("SELECT * FROM {linklist_maintainer_participants} WHERE server = 'http://participant2.loc'"));
+    $this->p3 = db_fetch_object(db_query("SELECT * FROM {linklist_maintainer_participants} WHERE server = 'http://participant3.loc'"));
+
+    db_query("INSERT INTO {blink_servers} (server, server_weight, last_attempted_update, server_key) VALUES ('%s', %d, %d, '%s')", "http://maintainer.loc/xmlrpc.php", 5, time(), $this->p1->pkey);
+    $this->maintainer = db_fetch_array(db_query("SELECT * FROM {blink_servers} WHERE server = '%s'", "http://maintainer.loc/xmlrpc.php"));
+    variable_set('blink_maximum_links_per_page', 2);
+
+  }
+
+  function testLinklist() {
+
+    $testtime = time();
+
+  // XML_RPC CALL
+    include_once(drupal_get_path('module', 'blink') . '/blink_update.inc.php');
+    include_once('includes/xmlrpc.inc');
+    include_once('includes/xmlrpcs.inc');
+
+    // new participant requests without valid IP addresses are ignored
+    $response = xmls_linklist_maintainer_get_linklist('http://participantIP.loc', 'admin@participant4.loc', uniqid('T', TRUE), $this->pversion);
+    $this->assertTrue($response->code == 1, 'Response was code 1 for new participant with un-matching IP<br/>RESPONSE : ' . serialize($response), 'XML-RPC');
+    $this->assertTrue(db_result(db_query("SELECT pid FROM {linklist_maintainer_participants} WHERE server = 'http://participantIP.loc' AND ip LIKE '%%unknown-ip%%'")), 'New participant with un-matching IP was saved', 'XML-RPC');
+    
+    // testing for new participant request
+    $response = xmls_linklist_maintainer_get_linklist('http://participant4.loc', 'admin@participant4.loc', variable_get('linklist_maintainer_test_key', ''), $this->pversion);
+    $this->assertTrue($response->code == 1, 'Response was code 1 for new participant with valid IP<br/>RESPONSE : ' . serialize($response), 'XML-RPC'); // TODO: change this test when the silent server is implemented
+    $this->assertTrue(db_result(db_query("SELECT pid FROM {linklist_maintainer_participants} WHERE server = 'http://participant4.loc'")), 'New participant with valid IP should be saved (test uses testing key instead of valid IP)', 'XML-RPC');
+    $this->p4 = db_fetch_object(db_query("SELECT * FROM {linklist_maintainer_participants} WHERE server = 'http://participant4.loc'"));
+
+    $response = xmls_linklist_maintainer_get_linklist('http://participant5.loc', 'admin@participant5.loc', variable_get('linklist_maintainer_test_key', ''), $this->pversion);
+    $this->p5 = db_fetch_object(db_query("SELECT * FROM {linklist_maintainer_participants} WHERE server = 'http://participant5.loc'"));
+
+    // approved participants get the linklist from rpc
+    $response = xmls_linklist_maintainer_get_linklist($this->p1->server, $this->p1->email, $this->p1->pkey, $this->pversion);
+    $this->assertTrue(count($response->linklist), 'Linklist is sent from maintainer', 'XML-RPC');
+    $this->assertTrue(TRUE, 'serialize($response): '. serialize($response), 'XML-RPC');
+    blink_update_goals($response->linklist, $this->maintainer);
+    $this->assertTrue(($li = db_result(db_query("SELECT COUNT(*) FROM {blink_goals} p INNER JOIN {linklist_maintainer_goals} m WHERE p.goal_uid = m.goal_uid"))) == 4, "4 goals properly saved by participant module ($li)", 'XML-RPC');
+    $this->assertFalse($li = db_result(db_query("SELECT COUNT(*) FROM {blink_goals} WHERE url NOT LIKE 'http://%%'")), "Goals are transferred as absolute links ($li bad)", 'XML-RPC');
+
+    // TIME: pretend all link goals were fetched 30 seconds ago
+    db_query("UPDATE {blink_goals} SET goal_updated = %d", strtotime('-30 seconds'));
+
+    // unapproved participants get no response from rpc - WILL BE USEFUL IF WE BRING BACK IP ADDRESS CHECKING
+    //$response = xmls_linklist_maintainer_get_linklist($this->p4->server, $this->p4->email, $this->p4->pkey, $this->pversion);
+    //$this->assertNull($response, 'Response was null for existing participant with bad IP, even if the test key is used<br/>RESPONSE : ' . serialize($response), 'XML-RPC'); // TODO: change this test when the silent server is implemented
+
+    // blocked participants receive linklist, but all weights are 0
+    $response = xmls_linklist_maintainer_get_linklist($this->p2->server, $this->p2->email, $this->p2->pkey, $this->pversion);
+    if (is_array($repsonse->linklist)) {
+      foreach ($response->linklist as $link) {
+        $total_weight += $link['weight'];
+      }
+    }
+    $this->assertTrue(count($response->linklist) && $total_weight == 0, 'Linklist is sent from maintainer to blocked participant, with all weights 0', 'XML-RPC');
+    $this->assertTrue(TRUE, 'serialize($response): '. serialize($response), 'XML-RPC');
+
+    // banned participants receive error code 86 from rpc
+    $response = xmls_linklist_maintainer_get_linklist($this->p3->server, $this->p3->email, $this->p3->pkey, $this->pversion);
+    $this->assertTrue($response->code == 86, 'Banned participant receives code 86', 'XML-RPC');
+    $this->assertTrue(TRUE, 'serialize($response): '. serialize($response), 'XML-RPC');
+
+
+
+
+  // KEYWORD LINKING
+    // link replacement in posts
+    $this->drupalGet('node/3');
+    // links are replaced
+    $this->assertLink('interesting text', 1, 'Blink module replaces links on node load', 'KW');
+
+    // existing links in the page itself are not re-replaced
+    $this->assertRaw("<a href='http://example.com/an-interesting-text-of-sorts.html'>interesting text</a>", 'Blink module leaves existing links intact', 'KW');
+
+    // links should be applied even if target case is different
+    $this->drupalGet('node/4');
+    $this->assertLink('test Post', 0, 'Blink module respects keyword case', 'KW');
+
+    // links should not be applied for partial word matches, e.g. text in textually.
+    $this->assertNoLink('interesting text', 'Links should not be applied for partial word matches - text / textually', 'KW');
+
+    // links should not be applied across sentence or phrase boundries
+    $this->assertRaw(' nonexistent.  Text ', 'Links should not be applied across sentence or phrase boundaries.', 'KW');
+
+    // existing link instances should be applied if present in text body and less than max_links -- even if link weight_local=0
+    db_query("UPDATE {blink_goals} SET weight_local = 0 WHERE kw = 'interesting text'");
+    $this->drupalGet('node/3');
+    $this->assertLink('interesting text', 1, 'Blink module replaces links on node load', 'KW');
+
+    // TIME: blink should not update links every time an existing link is used - pretend all existing link instances were created 20 seconds ago
+    db_query("UPDATE {blink_links} bll SET bll.li_updated = %d", strtotime('-20 seconds'));
+
+  // XML-RPC - UPDATE MAINTAINER TABLES
+    $plinks = blink_fetch_link_instances($this->maintainer['blsid']);
+    $this->assertTrue(($li = count($plinks)) == 3, "Blink fetched 3 link instances ($li)", 'XML-RPC');
+    $response = xmls_linklist_maintainer_get_linklist($this->p1->server, $this->p1->email, $this->p1->pkey, $this->pversion, $plinks);
+    // Weight Adjustment
+    $this->assertTrue(($testweights = $this->weighttest()) == array(1 => 3, 2 => 6, 3 => 168), "Weights adjusted; returned<br/><pre>" . print_r($testweights, TRUE) . '</pre>', 'Weights');
+
+    // Tests
+    $this->assertTrue((count($response->saved_links['new']) . count($response->saved_links['updated']) . count($response->saved_links['deleted'])) == '300', 'Below should be 3 new links communicated to the maintainer:<pre>' . print_r($response->saved_links, TRUE) . '</pre>', 'XML-RPC');
+    $this->assertTrue(($li = db_result(db_query("SELECT COUNT(*) FROM {linklist_maintainer_stats} WHERE pid = %d", $this->p1->pid))) == 3, "3 link instances in maintainer tables ($li)", 'XML-RPC');
+
+    // create more links to test updating of pages and linklists
+    db_query("INSERT INTO {linklist_maintainer_goals} (goal_uid, kw, url, weight, adj_weight, ldate) VALUES ('%s', 'other pages', 'node/1', 10, 10, %d)", uniqid('G', TRUE), time());
+    db_query("INSERT INTO {linklist_maintainer_goals} (goal_uid, kw, url, weight, adj_weight, ldate) VALUES ('%s', 'capitalization', 'node/2', 10, 10, %d)", uniqid('G', TRUE), time());
+    // and the goals for links within links
+    db_query("INSERT INTO {linklist_maintainer_goals} (goal_uid, kw, url, weight, adj_weight, ldate) VALUES ('%s', 'links within', 'node/5', 10, 10, %d)", uniqid('G', TRUE), time());
+    db_query("INSERT INTO {linklist_maintainer_goals} (goal_uid, kw, url, weight, adj_weight, ldate) VALUES ('%s', 'links within links', 'node/5', 10, 10, %d)", uniqid('G', TRUE), time());
+    // update blink tables
+    $response = xmls_linklist_maintainer_get_linklist($this->p1->server, $this->p1->email, $this->p1->pkey, $this->pversion, $plinks);
+    blink_update_goals($response->linklist, $this->maintainer);
+    $this->assertTrue(($li = db_result(db_query("SELECT COUNT(*) FROM {blink_goals} p INNER JOIN {linklist_maintainer_goals} m WHERE p.goal_uid = m.goal_uid"))) == 8, "8 goals properly saved by participant module ($li)", 'XML-RPC');
+
+    // to make sure that all functions work with other entries in the database, save some fake ones
+    $new_link_instances = array(
+      array('lid' => 1, 'link_uid' => uniqid('L', TRUE), 'pid' => 2, 'page' => 'http://example.com', 'li_updated' => time()),
+      array('lid' => 2, 'link_uid' => uniqid('L', TRUE), 'pid' => 2, 'page' => 'http://example.com', 'li_updated' => time()),
+      array('lid' => 1, 'link_uid' => uniqid('L', TRUE), 'pid' => 3, 'page' => 'http://example.com/page2.html', 'li_updated' => time()),
+    );
+    foreach ($new_link_instances as $link) {
+      drupal_write_record('linklist_maintainer_stats', $link);
+    }
+    $new_link_goal = array('goal_uid' => uniqid('G', TRUE), 'blsid' => 1000, 'kw' => 'this had better still be there at the end!', 'url' => 'http://example.com', 'weight' => 5, 'weight_local' => 5, 'goal_updated' => time());
+    drupal_write_record('blink_goals', $new_link_goal);
+
+  // KEYWORD LINKING - UPDATES
+    // blink should not create more keyword links than the maximum allowed
+    $this->drupalGet('node/3');
+    $this->assertNoLink('other pages', 'Blink should not create more keyword links than the maximum allowed', 'KW');
+
+    // blink should create more keywords on pages that do not yet have the maximum allowed
+    $this->drupalGet('node/4');
+    $this->assertLink('capitalization', 0, 'Blink should create more keyword links on pages that do not yet have the max allowed', 'KW');
+
+  // XMLRPC - UPDATE MAINTAINER TABLES WITH EXISTING RECORDS
+    $plinks = blink_fetch_link_instances($this->maintainer['blsid']);
+    $this->assertTrue(($li = count($plinks)) == 4, "Blink fetched 4 link instances ($li)", 'XML-RPC');
+    $response = xmls_linklist_maintainer_get_linklist($this->p1->server, $this->p1->email, $this->p1->pkey, $this->pversion, $plinks);
+    $this->assertTrue((count($response->saved_links['new']) . count($response->saved_links['deleted'])) == '10', "Below should be 1 new link communicated to the maintainer:<pre>" . print_r($response->saved_links, TRUE) . '</pre>', 'XML-RPC');
+    // Weight Adjustment
+    $this->assertTrue(($testweights = $this->weighttest()) == array(1 => 2, 2 => 3, 3 => 46, 5 => 183, 6 => 13, 7 => 183, 8 => 183), "Weights adjusted; returned<br/><pre>" . print_r($testweights, TRUE) . '</pre>', 'Weights');
+    // TIME: test whether links were updated on second loading of 3 and 4
+    $this->assertTrue(count($response->saved_links['updated']) == 0, 'If there are updated links above, then blink may be marking links as updated on every page view (Search linklist_maintainer.test file for "TIME:")', 'XML-RPC');
+    $this->assertTrue(($li = db_result(db_query("SELECT COUNT(*) FROM {linklist_maintainer_stats} WHERE pid = %d", $this->p1->pid))) == 4, "4 link instances in maintainer tables ($li)", 'XML-RPC');
+
+  // KEYWORD LINKING - OTHER UPDATES
+    // blink might update a link instance
+    db_query("UPDATE {blink_links} SET li_updated = %d WHERE liid = %d", strtotime('+1 second'), 4);
+
+    // blink might remove a link instance
+    db_query("DELETE FROM {blink_links} WHERE liid = %d", 3);
+
+  // XMLRPC - UPDATE MAINTAINER TABLES WITH UPDATES AND DELETIONS
+    $plinks = blink_fetch_link_instances($this->maintainer['blsid']);
+    $this->assertTrue(($li = count($plinks)) == 3, "Blink fetched 3 link instances ($li)", 'XML-RPC');
+    $response = xmls_linklist_maintainer_get_linklist($this->p1->server, $this->p1->email, $this->p1->pkey, $this->pversion, $plinks);
+    $this->assertTrue((count($response->saved_links['new']) . count($response->saved_links['updated']) . count($response->saved_links['deleted'])) == '011', 'Below should be 1 updated and 1 deleted link communicated to the maintainer:<pre>' . print_r($response->saved_links, TRUE) . '</pre>', 'XML-RPC');
+    $this->assertTrue(($li = db_result(db_query("SELECT COUNT(*) FROM {linklist_maintainer_stats} WHERE pid = %d", $this->p1->pid))) == 3, "3 link instances in maintainer tables ($li)", 'XML-RPC');
+
+  // XMLRPC - COMPLETE TESTS TO ENSURE SEPARATION OF SERVERS IN XMLRPC FUNCTIONS
+    $this->assertTrue(($li = db_result(db_query("SELECT COUNT(*) FROM {blink_goals} WHERE kw = 'this had better still be there at the end!'"))) == 1, "Link goals for other maintainers are not affected by xmlrpc calls<br/>($li / 1 goal)", 'XML-RPC');
+    $this->assertTrue(($li = db_result(db_query("SELECT COUNT(*) FROM {linklist_maintainer_stats}"))) == 6, "Link instances in maintainer stats table are not affected by xmlrpc calls<br/>($li / 6 links)", 'XML-RPC');
+    $this->assertTrue(($li = db_result(db_query("SELECT COUNT(DISTINCT pid) FROM {linklist_maintainer_stats}"))) == 3, 'Link instances in maintainer stats table are not affected by xmlrpc calls<br/>($li / 3 participants)', 'XML-RPC');
+
+  // KEYWORD LINKING - LINKS WITHIN LINKS
+    // after visiting node 5, there should be only one more link instance
+    $count = db_result(db_query('SELECT COUNT(*) FROM {blink_links}'));
+    $this->drupalGet('node/5');
+    $this->assertTrue(($li = db_result(db_query("SELECT COUNT(*) FROM {blink_links}"))) == $count + 1, "Blink effectively handles overlapping links ($li - $count)");
+    $this->assertTrue(($li = db_result(db_query("SELECT COUNT(*) FROM {blink_links} bll INNER JOIN {blink_goals} blg ON bll.gid = blg.gid WHERE blg.kw LIKE '%s'", 'links withi%'))) == 1, "Blink effectively handles overlapping links ($li)");
+
+
+
+
+  // MAINTAINER ADMIN LINKLIST FORM (SUPERUSER)
+    // admin linklist form is visible (superUser)
+    $this->drupalGet('admin/settings/linklist-maintainer/linklist');
+    $this->assertResponse(200, 'ADMIN: Admin linklist form is visible');
+
+    // admin linklist form is sortable
+    $this->clickLink(t('Target URL'));
+    $this->assertRaw(t('/misc/arrow-asc.png'), 'Admin linklist form sorts data');
+
+    // admin linklist form allows editing of weight
+    $this->drupalPost('admin/settings/linklist-maintainer/linklist', array('table[1][weight]' => 10), t('Save'));
+    $this->assertFieldByName('table[1][weight]', 10, 'ADMIN: Admin linklist form allows editing weight');
+
+    // disabled items do not appear on the normal form
+    $this->assertNoText('few kws', 'Disabled links do not appear on standard form');
+
+    // regular items do not appear on the "disabled" form
+    $this->drupalGet('admin/settings/linklist-maintainer/linklist/disabled');
+    $this->assertNoText('interesting text', 'Regular items do not appear on form with disabled links');
+
+    // all items appear on the "all" form
+    $this->drupalGet('admin/settings/linklist-maintainer/linklist/disabled');
+    $this->assertText('few kws', 'Disabled links appear on form with all links');
+
+    // link creation: links to 404 urls ask for confirmation, then save
+    $edit = array(
+      'table[new][kw]' => 'bad link',
+      'table[new][url]' => 'http://example.com/bad-page.html',
+      'table[new][weight]' => 5,
+    );
+    $this->drupalPost('admin/settings/linklist-maintainer/linklist', $edit, t('Save'));
+    $this->assertFieldById('edit-override', t('I really want to create a bad link'), 'Links to bad urls require confirmation');
+    $this->drupalPost(NULL, array(), t('I really want to create a bad link'));
+    $this->assertRaw('<td>bad link</td>', 'Links to bad urls are created after confirmation');
+
+    // link creation: links to 200 urls will be created
+    $edit = array(
+      'table[new][kw]' => 'good link',
+      'table[new][url]' => 'http://example.com',
+      'table[new][weight]' => 5,
+    );
+    $this->drupalGet('admin/settings/linklist-maintainer/linklist');
+    $this->assertFalse($li = db_result(db_query("SELECT COUNT(*) FROM {linklist_maintainer_goals} WHERE url = 'http://example.com' AND ldate > %d", time() - 20)), "Saving targets accurately updates ldate ($li)");
+    $this->drupalPost('admin/settings/linklist-maintainer/linklist', $edit, t('Save'));
+    $this->assertRaw('<td>good link</td>', 'Links to good urls are saved');
+    // TIME: the link goal date on the maintainer must be saved every time the target url changes
+    $this->assertTrue($li = db_result(db_query("SELECT COUNT(*) FROM {linklist_maintainer_goals} WHERE kw = 'good link' AND ldate > %d", time() - 20)), "Saving targets accurately updates ldate ($li)");
+
+  // MAINTAINER ADMIN LINK EDIT FORM (SUPERUSER)
+    // admin link details form appears (superUser)
+    $this->drupalGet('admin/settings/linklist-maintainer/link/details/1');
+    $this->assertResponse(200, 'ADMIN: Admin link report is visible');
+
+    // admin link edit form functions (superUser)
+    $this->drupalPost('admin/settings/linklist-maintainer/link/edit/5', array('url' => 'http://example.com/bad-page2.html'), t('Save'));
+    $this->assertResponse(200, 'ADMIN: Admin link edit form is available');
+    $this->assertFieldById('edit-override', t('I really want to create a bad link'), 'Links to bad urls require confirmation');
+    $this->drupalPost(NULL, array(), t('I really want to create a bad link'));
+    $this->assertText('http://example.com/bad-page2.html - ', 'Links to bad urls are created after confirmation (link form)');
+    $this->drupalGet('admin/settings/linklist-maintainer/link/edit/5');
+    $this->drupalPost('admin/settings/linklist-maintainer/link/edit/5', array('url' => 'http://google.com'), t('Save'));
+    $this->assertText('http://google.com - ', 'Links to good urls are saved (link form)');
+
+  // MAINTAINER ADMIN PARTICIPANT FORMS (SUPERUSER)
+    // participant list form appears (superUser)
+    $this->drupalGet('admin/settings/linklist-maintainer/participants');
+    $this->assertResponse(200, 'ADMIN: Admin participant form is visible');
+
+    // participants can be blocked, banned, unblocked, unbanned, approved, and ignored (superuser)
+    $edit = array(
+      'table[2][blocked]' => FALSE,
+      'table[2][banned]' => TRUE,
+      'table[3][blocked]' => TRUE,
+      'table[3][banned]' => FALSE,
+      'table[4][approved]' => TRUE,
+      'table[5][ignored]' => TRUE,
+    );
+    $this->drupalPost('admin/settings/linklist-maintainer/participants', $edit, t('Save'));
+    $this->assertFieldById('edit-table-2-blocked', FALSE, 'ADMIN: Participants can be un-blocked');
+    $this->assertFieldById('edit-table-2-banned', TRUE, 'ADMIN: Participants can be banned');
+    $this->assertFieldById('edit-table-3-blocked', TRUE, 'ADMIN: Participants can be blocked');
+    $this->assertFieldById('edit-table-3-banned', FALSE, 'ADMIN: Participants can be un-banned');
+    $this->assertFieldById('edit-table-4-approved', TRUE, 'ADMIN: Participants can be approved');
+    $this->assertNoFieldById('edit-table-5-approved', FALSE, 'ADMIN: Participants can be ignored');
+
+    // participant detail form is visible (superuser)
+    $this->drupalGet('admin/settings/linklist-maintainer/participant/details/2');
+    $this->assertResponse(200, 'ADMIN: Admin participant detail form is visible');
+
+    // participants can be banned or blocked (superuser)
+    $this->drupalPost('admin/settings/linklist-maintainer/participant/details/2', array('blocked' => TRUE, 'banned' => FALSE), t('Save'));
+    $this->assertFieldById('edit-blocked', TRUE, 'participant detail form saved blocked status');
+    $this->assertFieldById('edit-banned', FALSE, 'participant detail form saved banned status');
+
+  // MAINTAINER ADMIN TARGET FORMS (SUPERUSER)
+    // target list form
+    $this->drupalGet('admin/settings/linklist-maintainer/targets');
+    $this->assertResponse(200, 'ADMIN: Admin target form is visible');
+
+    // target detail form
+    $this->drupalGet('admin/settings/linklist-maintainer/targets/3');
+    $this->assertResponse(200, 'ADMIN: Admin target detail form is visible');
+
+    // detail form saves altered url
+    $this->assertFalse($li = db_result(db_query("SELECT COUNT(*) FROM {linklist_maintainer_goals} WHERE lid = 3 AND ldate > %d", time() - 20)), "Saving targets accurately updates ldate ($li)");
+    $this->drupalPost('admin/settings/linklist-maintainer/targets/3', array('newurl' => 'http://example.com'), t('Save'));
+    $this->assertText('Target Detail : http://example.com', 'Target report saves altered url');
+    // TIME: the link goal date on the maintainer must be saved every time the target url changes
+    $this->assertTrue($li = db_result(db_query("SELECT COUNT(*) FROM {linklist_maintainer_goals} WHERE lid = 3 AND ldate > %d", time() - 20)), "Saving targets accurately updates ldate ($li)");
+    
+    // detail form saves altered weights
+    $this->drupalPost(NULL, array('table[3][weight]' => 8), t('Save'));
+    $this->assertFieldById('edit-table-3-weight', 8, 'Target report saves altered weights');
+    $this->assertFieldById('edit-table-6-weight', 10, 'Target report saves altered weights');
+    $this->assertFieldById('edit-table-10-weight', 5, 'Target report saves altered weights');
+
+    // detail form will not save improper url, or url empty
+    $this->drupalPost(NULL, array('newurl' => 'http://example.com/badlink.html'), t('Save'));
+    $this->assertText('That url was unavailable', 'Target report will not save a bad link');
+    $this->drupalPost(NULL, array('newurl' => ''), t('Save'));
+    $this->assertText('a url is required', 'A url is required on target report');
+
+
+
+
+  // MAINTAINER ADMIN LINKLIST FORM (ADMINUSER)
+    // admin linklist form appears as report (adminUser)
+    $this->drupalLogin($this->adminUser);
+    $this->drupalGet('admin/settings/linklist-maintainer/linklist');
+    $this->assertResponse(200, 'SUBADMIN: Linklist is visible');
+    $this->assertNoFieldByName('table[new][kw]', 'SUBADMIN: Linklist does not have new kw entry');
+    $this->assertNoFieldByName('table[1][weight]', 'SUBADMIN: Linklist does not allow weight editing');
+    $this->assertNoRaw('value="' . t('Save') . '"', 'SUBADMIN: Linklist does not have submit button');
+    $this->assertNoLink('edit', 'SUBADMIN: Linklist does not have links to link edit form');
+
+    // admin link report appears (adminUser)
+    $this->drupalGet('admin/settings/linklist-maintainer/link/details/1');
+    $this->assertResponse(200, 'SUBADMIN: Admin link report is visible');
+
+    // admin link edit form is 403 (adminUser)
+    $this->drupalGet('admin/settings/linklist-maintainer/link/edit/1');
+    $this->assertResponse(403, 'SUBADMIN: Admin link edit form is 403');
+
+  // MAINTAINER ADMIN PARTICIPANT FORMS (ADMINUSER)
+    // participant list form appears as report (adminUser)
+    $this->drupalGet('admin/settings/linklist-maintainer/participants');
+    $this->assertResponse(200, 'SUBADMIN: Admin participants form is visible');
+    $this->assertNoFieldById('edit-submit', t('Save'), 'SUBADMIN: Admin participants form is displayed as a report');
+
+    // participant detail form appears as report (adminUser)
+    $this->drupalGet('admin/settings/linklist-maintainer/participant/details/2');
+    $this->assertResponse(200, 'SUBADMIN: Admin participant detail form is visible');
+    $this->assertNoFieldById('edit-submit', t('Save'), 'SUBADMIN: Admin participant detail form is displayed as a report');
+
+  // MAINTAINER ADMIN TARGET FORMS (ADMINUSER)
+    // target list is visible
+    $this->drupalGet('admin/settings/linklist-maintainer/targets');
+    $this->assertResponse(200, 'SUBADMIN: Admin target list is visible');
+    $this->assertNoFieldById('edit-submit', t('Save'), 'SUBADMIN: Admin target list is displayed as a report');
+
+    // participant detail form appears as report (adminUser)
+    $this->drupalGet('admin/settings/linklist-maintainer/targets/3');
+    $this->assertResponse(200, 'SUBADMIN: Admin target detail form is visible');
+    $this->assertNoFieldById('edit-submit', t('Save'), 'SUBADMIN: Admin target detail form is displayed as a report');
+
+
+
+
+  // MAINTAINER ADMIN FORMS (NORMAL USER)
+    // admin linklist form is 403 (normalUser)
+    $this->drupalLogout();
+    $this->drupalGet('admin/settings/linklist-maintainer/linklist');
+    $this->assertResponse(403, 'ANON: Admin linklist form is 403');
+
+    // admin link report is 403 (normalUser)
+    $this->drupalGet('admin/settings/linklist-maintainer/link/details/1');
+    $this->assertResponse(403, 'ANON: Admin link detail is 403');
+
+    // admin link edit form is 403 (normalUser)
+    $this->drupalGet('admin/settings/linklist-maintainer/link/edit/1');
+    $this->assertResponse(403, 'ANON: Admin link edit form is 403');
+
+    // participant list form is 403 (normalUser)
+    $this->drupalGet('admin/settings/linklist-maintainer/participants');
+    $this->assertResponse(403, 'ANON: Admin participants form is 403');
+
+    // participant detail form is 403 (normalUser)
+    $this->drupalGet('admin/settings/linklist-maintainer/participant/details/2');
+    $this->assertResponse(403, 'ANON: Admin participant detail form is 403');
+
+    // target list form is 403 (normalUser)
+    $this->drupalGet('admin/settings/linklist-maintainer/targets');
+    $this->assertResponse(403, 'ANON: Admin participants form is 403');
+
+    // target detail form is 403 (normalUser)
+    $this->drupalGet('admin/settings/linklist-maintainer/targets/3');
+    $this->assertResponse(403, 'ANON: Admin participant detail form is 403');
+
+
+
+
+  // PARTICIPANT ADMIN FORMS
+
+    // local links form is visible to superuser
+
+    // local links form saves local links
+
+    // local weights are accurately calculated
+
+
+
+
+
+    
+
+  }
+
+  function weighttest() {
+    $q = db_query("SELECT lid, adj_weight FROM {linklist_maintainer_goals} WHERE weight > 0");
+    while ($r = db_fetch_object($q)) {
+      $weights[$r->lid] = $r->adj_weight;
+    }
+    return $weights;
+  }
+
+}

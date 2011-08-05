@@ -1,0 +1,5 @@
+; $Id$ 
+name = Linklist Maintainer
+description = Allows administrators to maintain lists of link targets to which other sites can subscribe
+package =  * Link Collaboration Tools
+core = 6.x

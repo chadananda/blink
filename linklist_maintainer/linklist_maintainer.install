@@ -1,0 +1,243 @@
+<?php
+// $Id$ 
+
+/**
+ * @file 
+ */
+
+/**
+ * Implementation of hook_install() 
+ */
+function linklist_maintainer_install() {
+  $result = drupal_install_schema('linklist_maintainer');
+  foreach ($result as $key => $try) {
+    $key++;
+    $total = count($result);
+    if ($try['success']) {
+      drupal_set_message(st("Linklist maintainer table $key of $total successfully installed"));
+    }
+  }
+  variable_set('linklist_maintainer_test_key', user_password(40));
+}
+
+/**
+ * Implementation of hook_uninstall() 
+ */
+function linklist_maintainer_uninstall() {
+  $success = drupal_uninstall_schema('linklist_maintainer');
+  if ($success) {
+    drupal_set_message(st('Linklist maintainer tables successfully removed'));
+  }
+  variable_del('linklist_maintainer_key_hash');
+}
+
+/**
+ * Implementation of hook_schema()
+ */
+function linklist_maintainer_schema() {
+
+  $schema = array();
+
+  $schema['linklist_maintainer_participants'] = array(
+    'description' => 'Particiants in the blink program',
+    'fields' => array(
+      'pid' => array(
+        'description' => 'Auto-increment primary key field',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'server' => array(
+        'description' => 'Base uri for the server',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'pkey' => array(
+        'description' => 'Unique key for each participant',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'email' => array(
+        'description' => 'Contact email of administrative user',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'ip' => array(
+        'description' => 'serialized array of possible IP Addresses for the server',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'pdate' => array(
+        'description' => 'The date the participant became active - unix timestamp',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0
+      ),
+      'updated' => array(
+        'description' => 'The timestamp that the server was last updated',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => FALSE,
+        'default' => NULL,
+      ),
+      'approved' => array(
+        'description' => 'Approval status of the participant',
+        'type' => 'int',
+        'size' => 'tiny',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0
+      ),
+      'blocked' => array(
+        'description' => 'Blocked participants will not create new links',
+        'type' => 'int',
+        'size' => 'tiny',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0
+      ),
+      'banned' => array(
+        'description' => 'Banned participants will not be able to receive updates',
+        'type' => 'int',
+        'size' => 'tiny',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0
+      ),
+      'ignored' => array(
+        'description' => 'Ignored participants will not show up on administrative forms',
+        'type' => 'int',
+        'size' => 'tiny',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0
+      ),
+    ),
+    'primary key' => array('pid'),
+    'indexes' => array(
+      'server' => array('server'),
+      'pkey' => array('pkey'),
+      'pdate' => array('pdate'),
+      'updated' => array('updated'),
+    ),
+  );
+  $schema['linklist_maintainer_goals'] = array(
+    'description' => 'Link goals for the blink program of this maintainer',
+    'fields' => array(
+      'lid' => array(
+        'description' => 'Auto-increment primary key field',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'goal_uid' => array(
+        'description' => 'A unique id for each link',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'kw' => array(
+        'description' => 'Terms to be tagged as a link',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'url' => array(
+        'description' => 'URL to point the link towards',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'weight' => array(
+        'description' => 'A user-submitted number which will be used to determine the percentage of this link',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0
+      ),
+      'adj_weight' => array(
+        'description' => 'An automatically adjusted number which will be used to determine the percentage of this link',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0
+      ),
+      'ldate' => array(
+        'description' => 'The date the link became active - unix timestamp',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0
+      ),
+    ),
+    'primary key' => array('lid'),
+    'unique keys' => array(
+      'goal_uid' => array('goal_uid'),
+    ),
+    'indexes' => array(
+      'keyword' => array('kw'),
+      'url' => array('url'),
+      'weight' => array('weight'),
+      'adj_weight' => array('adj_weight'),
+    )
+  );
+  $schema['linklist_maintainer_stats'] = array(
+    'description' => 'Tracks each instance of every link for all blink participants',
+    'fields' => array(
+      'liid' => array(
+        'description' => 'Auto-increment primary key field',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'lid' => array(
+        'description' => 'fk - linklist_maintainer_goals.lid',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0
+      ),
+      'link_uid' => array(
+        'description' => 'A unique id for each link instance - assigned by participants',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'pid' => array(
+        'description' => 'fk - linklist_maintainer_participants.pid',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0
+      ),
+      'page' => array(
+        'description' => 'URL of the page holding each link instance',
+        'type' => 'varchar',
+        'length' => 25500,
+        'not null' => TRUE,
+      ),
+      'li_updated' => array(
+        'description' => 'The date the link instance became active - unix timestamp',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0
+      ),
+    ),
+    'primary key' => array('liid'),
+    'unique keys' => array(
+      'link_uid' => array('link_uid'),
+    ),
+    'indexes' => array(
+      'lid' => array('lid'),
+      'pid' => array('pid'),
+      'li_updated' => array('li_updated'),
+    ),
+  );
+  return $schema;
+}

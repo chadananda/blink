@@ -1,0 +1,327 @@
+<?php
+// $Id$ 
+
+/**
+ * @file 
+ */
+
+/**
+ * Implementation of hook_install() 
+ */
+function blink_install() {
+  $result = drupal_install_schema('blink');
+  foreach ($result as $key => $try) {
+    $key++;
+    $total = count($result);
+    if ($try['success']) drupal_set_message(st("Blink table $key of $total successfully installed")); 
+  }
+  blink_install_default_servers();
+  blink_random_link_class();
+  cache_clear_all(NULL, 'cache_page');
+}
+
+/**
+ * Implementation of hook_uninstall() 
+ */
+function blink_uninstall() {
+  $success = drupal_uninstall_schema('blink');
+  if ($success) drupal_set_message(st('Blink tables successfully removed'));
+  blink_varible_list(TRUE);
+}
+
+
+/**
+ * Implementation of hook_schema()
+ */
+function blink_schema() {
+  $schema = array();
+
+  $schema['blink_servers'] = array(
+    'description' => 'Remote server(s) feeding links to this site',
+    'fields' => array(
+      'blsid' => array(
+        'description' => 'Autoinc id for each link server',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ), 
+      'server' => array(
+        'description' => "Full URL of the server's XML-RPC stub file",
+        'type' => 'varchar',
+        'length' => 4000,
+        'not null' => TRUE,
+      ), 
+      'server_weight' => array(
+        'description' => 'Relative weight assigned to links from this server',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 1,
+      ),
+      'last_attempted_update' => array(
+        'description' => 'The last link list update - unix timestamp',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'last_successful_update' => array(
+        'description' => 'The last link list update - unix timestamp',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'server_key' => array(
+        'description' => "Unique ID provided by the server. This key works with this domain and IP only.",
+        'type' => 'varchar',
+        'length' => 40,
+        'not null' => TRUE,
+      ),
+      'status' => array(
+        'description' => "Status of communications with this server: [unregistered|pending_approval|successful_update|failed_update]",
+        'type' => 'varchar',
+        'length' => 20,
+        'not null' => TRUE,
+        'default' => 'unregistered',
+      ),
+    ),
+    'primary key' => array('blsid'), 
+  );
+  
+  $schema['blink_goals'] = array(
+    'description' => 'All link goals applied to this website',
+    'fields' => array(
+      'gid' => array(
+        'description' => 'Autoinc local id for goal link',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'goal_uid' => array(
+        'description' => 'Unique identifier (unique id) for each link goal (from server)',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'blsid' => array(
+        'description' => '0 for local target or [bls.blsid] for remote',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,        
+      ),
+      'kw' => array(
+        'description' => 'Target keyword phrase to be replaced with a link',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'kw_regex' => array(
+        'description' => 'Cached regex of target keyword phrase',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'url' => array(
+        'description' => 'Href URL of this link',
+        'type' => 'varchar',
+        'length' => 4000,
+        'not null' => TRUE,
+      ), 
+      'weight' => array(
+        'description' => 'Server-assigned weight of the link',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'weight_local' => array(
+        'description' => 'Adjusted local weight: (blg.weight / bls.max_weight * bls.server_weight)',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'goal_source' => array(
+        'description' => 'Classificaiton of goal by source module',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => 'linklist',
+      ),
+      'goal_updated' => array(
+        'description' => 'The date this goal was created or changed - unix timestamp',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0
+      ),
+    ),
+    'primary key' => array('gid'),
+    'unique keys' => array(
+      'goal_uid' => array('goal_uid'),
+    ),
+    'indexes' => array(
+      'blsid' => array('blsid'),
+    )
+  );
+  $schema['blink_links'] = array(
+    'description' => 'Links already built on this website',
+    'fields' => array(
+      'liid' => array(
+        'description' => 'Autoinc local id for goal link',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'link_uid' => array(
+        'description' => 'Unique identifier (unique id) for each link (from client)',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'gid' => array(
+        'description' => 'Fk to [blg.gid]',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'nid' => array(
+        'description' => 'Fk to node_id (node or page hosting this link)',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'page' => array(
+        'description' => 'URL of page hosting this link',
+        'type' => 'varchar',
+        'length' => 4000,
+        'not null' => TRUE,
+      ),
+      'url_override' => array(
+        'description' => 'Optional override of [blg.page]',
+        'type' => 'varchar',
+        'length' => 4000,
+        'not null' => TRUE,
+      ),
+      'li_updated' => array(
+        'description' => 'The date this link instance became active - unix timestamp',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0
+      ),
+    ),  
+    'primary key' => array('liid'),
+    'indexes' => array(
+      'gid' => array('gid'),
+      'nid' => array('nid'),
+      'lidate' => array('li_updated'),
+    ),
+  ); 
+  return $schema;
+}
+
+/**
+ * install default server list if default file exists
+ */
+function blink_install_default_servers() {
+  // create local links user
+  if (!db_result(db_query("SELECT count(*) FROM {blink_servers} WHERE server='local'"))) {
+   db_query('INSERT INTO {blink_servers} SET server="local", server_weight=1 , server_key="%s", last_attempted_update=%d, '.
+     'last_successful_update=%d, status="successful_update"', uniqid('b', TRUE), time(), time());
+  }
+
+  // add default servers to list
+  $file = drupal_get_path('module', 'blink') .'/blink_defaults.ini.php';
+  if (!file_exists($file)) return;
+  $ini = parse_ini_file($file, TRUE);
+
+  drupal_set_message("Adding servers, found ". count($ini['servers']) ." servers to add.");
+
+  foreach ($ini['servers'] as $server => $server_weight) {
+    if (!$server) continue;
+    if (!$server_weight) $server_weight = 1;
+    // if not found in table then insert (the table should be empty but why not...)
+    if (!db_result(db_query('SELECT blsid FROM {blink_servers} WHERE server="%s"', $server))) {
+     $server_key = uniqid('b', TRUE);
+     if (db_query('INSERT INTO {blink_servers} SET server="%s", server_weight=%d , server_key="%s"', $server, $server_weight, $server_key))
+       drupal_set_message('Added Blink server: '. $server); 
+     /* //blink oops, drupal_write_record does not work inside hook_install
+       $rec = array('server' => $server, 'server_weight' => $server_weight, 'server_key' => uniqid('b', TRUE));
+       if (drupal_write_record('blink_servers', $rec)) drupal_set_message('Added Blink server: '. $server);
+        else drupal_set_message('Failed to add server: '. $server, 'warning');
+      */
+    }
+  }
+}
+
+function blink_random_link_class() {
+  // generates a random yet pronouncable word  
+  $length = rand(4, 6);
+  srand((double)microtime()*1000000);
+  $vowels = array("a", "e", "i", "o", "u");
+  $cons = array("b", "c", "d", "g", "h", "j", "k", "l", "m", "n", "p", "r", "s", "t", "u", "v", "w", "tr",
+    "cr", "br", "fr", "th", "dr", "ch", "ph", "wr", "st", "sp", "sw", "pr", "sl", "cl");
+  $num_vowels = count($vowels);
+  $num_cons = count($cons);
+  for ($i = 0; $i < $length; $i++) $result .= $cons[rand(0, $num_cons - 1)] . $vowels[rand(0, $num_vowels - 1)];
+  variable_set('blink_link_class', substr($result, 0, $length));
+  variable_set('blink_link_style', 'text-decoration:none; border-bottom:1px dashed silver; color:inherit;');
+  variable_set('blink_link_style_hover', 'background:#FF9; border-bottom:1px solid;');
+}
+
+function blink_varible_list($clear = FALSE) {
+  $vars = array(
+    // general
+    'blink_last_check_updates',
+    'blink_defaults_reset',
+    // settings
+    'blink_maximum_links_per_page',
+    'blink_link_class',
+    'blink_link_style',
+    'blink_link_style_hover',
+    // servers
+    'blink_local_links_weight',
+    // selections
+    'blink_exclude_types',
+    'blink_exclude_paths',
+    //server urls
+    'blink_server_url_%',
+    // local goals
+    'blink_local_goal_%', 
+  );
+  if ($clear) {
+    foreach ($vars as $var) db_query('DELETE FROM {variable} WHERE name LIKE "%s"', $var);
+    $ret = db_query('SELECT name FROM {variable} WHERE name LIKE "blink_%"');
+    while ($var = db_result($ret)) $db_vars[] = $var;
+    if ($db_vars) drupal_set_message(t('Some variables possibly not deleted:') .'<ul><li>'. implode('<li>', $db_vars) .'</ul>', 'warning');
+     else drupal_set_message(t('All Blink variables successfully deleted.'));
+  }
+  return $vars;
+}
+
+function blink_update_6001() {
+  $ret = array();
+  $spec = array(
+    'description' => 'Cached regex of target keyword phrase',
+    'type' => 'varchar',
+    'length' => 255,
+    'not null' => TRUE,
+    'default' => '',
+  );
+  db_add_field($ret, 'blink_goals', 'kw_regex', $spec);
+  include_once(drupal_get_path('module', 'blink') . '/blink.class.php');
+  db_query("UPDATE {blink_goals} SET kw = REPLACE(kw, '\', '')");
+  $q = db_query("SELECT * FROM {blink_goals}");
+  while ($r = db_fetch_array($q)) {
+    $kw_regex = blink::get_check_kw($r['kw']);
+    db_query("UPDATE {blink_goals} SET kw_regex = '%s' WHERE gid = '%s'", $kw_regex, $r['gid']);
+    $i++;
+  }
+  $updated = db_result(db_query("SELECT COUNT(*) FROM {blink_goals} WHERE kw_regex != ''"));
+  drupal_set_message("Blink module updated $updated of $i rows");
+  return $ret;
+}

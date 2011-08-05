@@ -1,0 +1,40 @@
+th.centered, td.centered {text-align:center; padding: 0 3px; width:56px;}
+th.date, td.date {width:85px;}
+th.weight, td.weight {width:65px;}
+td.weight input {text-align:center;}
+.extras, td.details {text-align:right; font-size:10px; font-weight:normal;}
+
+span.linkcheck-good {font-size:11px; color:green;}
+span.linkcheck-bad {font-weight:bold; color:crimson; text-transform:uppercase;}
+
+td.active {background-color:transparent;}
+
+table {margin:50px auto;}
+table tr {line-height:20px;}
+
+table.link-details {width:80%; margin:50px 15% 50px 5%;}
+table.link-details td {font-weight:normal;}
+table.link-details td.leftcol {width:30%; font-weight:bold; text-align:right; padding-right:20px;}
+table.link-details td input.form-text {font-weight:normal; margin-left:-3px;}
+table.link-details tr {line-height:24px;}
+
+table div.options {width:126px; margin:9px 0; text-align:center; line-height:35px;}
+table div.options label {font-weight:bold;}
+table div.options.status0 {background-color:palegreen;}
+table div.options.status1 {background-color:#f9f160;}
+table div.options.status2 {background-color:lightcoral;}
+
+div.chart-key-wrapper {height:30px;position:relative;left:50px;display:block;margin:0 auto;}
+div.chart-key-color {height:20px;width:20px;display:inline;border:1px solid gray;margin:4px;padding:4px;}
+div.piechart-outer {float:left;}
+div.piechart-wrapper {margin-bottom:12px;}
+div.charts {margin:0 auto;}
+
+span.server-status {font-weight:bold; padding:0 4px;}
+span.server-status.Inactive {color:crimson;}
+span.server-status.Active {color:green;}
+
+td.total_weight, td.pcount {border-right:1px solid lightgray;}
+td.kwcount, td.lcount {border-left:1px solid lightgray;}
+
+span.unknown-ip {font-size:10px; background-color:#f9f160; position:relative; left:12px; top:-4px; padding:2px 4px;}

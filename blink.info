@@ -1,0 +1,5 @@
+; $Id$ 
+name = Blink
+description = Manage in-text keyword links supplied by centralized feed
+package = "* KOC"
+core = 6.x

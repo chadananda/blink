@@ -1,0 +1,64 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ *
+ */
+
+class BlinkTestCase extends DrupalWebTestCase {
+
+  function getInfo() {
+    return array(
+      'name' => 'Blink tests',
+      'description' => 'test functionality of blink module',
+      'group' => 'Blink'
+    );
+  }
+  function setUp() {
+    parent::setUp('blink');
+  }
+  function testBlink() {
+    include_once(drupal_get_path('module', 'blink') . '/blink.class.php');
+    $true = array(
+      'normal' => 'a normal word',
+      'normal word with spaces' => 'a normal word with spaces in it', # testing for spaces
+      "possessive word's" => "a word that is possessive word's word works (with apostrophe)", # testing for the apostrophe
+      'CaPiTaLiZaTiOn' => array('text' => 'original cApItAlIzAtIoN kept', 'test' => 'cApItAlIzAtIoN'), # capitalization in original text should be maintained
+      'beginning' => array('text' => 'Beginning and ending.', 'test' => 'Beginning'), # words at the beginning of sentences, with capitalization
+      'ending' => 'Beginning and ending.', # words at the ending of sentences, with punctuation
+      '([^\?\|]\+)$' => 'regex escapes the characters ([^\?\|]\+)$ in sentences, and adjusts for ends of words that do not end in a word character.',
+      'starred* words' => 'starred* words are properly escaped',
+    );
+    $false = array(
+      'links' => 'any <a href="http://example.com/real-links" class="links">real links</a> are left as is',
+      'per.od' => array('text' => 'periods are escaped for regex', 'test' => 'periods'),
+      'don\\\'t' => array('text' => "escaped apostrophes don't break anything", 'test' => "don't"),
+      'don\\\\\'t' => array('text' => "doubly escaped apostrophes don't break anything", 'test' => "don't"),
+      'don\\\\\\\'t' => array('text' => "triply escaped apostrophes don't break anything", 'test' => "don't"),
+    );
+    foreach ($true as $key => $value) {
+      $this->oneTest($key, $value, TRUE);
+    }
+    foreach ($false as $key => $value) {
+      $this->oneTest($key, $value, FALSE);
+    }
+
+  }
+
+  function oneTest($key, $value, $assert) {
+    $test = is_array($value) ? $value['test'] : $key;
+    $text = is_array($value) ? $value['text'] : $value;
+    $weight = is_array($value) && $value['weight'] ? $value['weight'] : 5;
+    $link = array('kw' => $key, 'weight' => $weight, 'url' => 'http://example.com');
+    $links[] = $link;
+    blink::markup_text($text, $links);
+    if ($assert) {
+      $this->assertFalse(stripos($text, "<a href=\"http://example.com\">$test</a>") === FALSE, $text . ' (" ' . blink::get_check_kw($key) . ' ")');
+    }
+    else {
+      $this->assertTrue(stripos($text, "<a href=\"http://example.com\">$test</a>") === FALSE, $text . ' (" ' . blink::get_check_kw($key) . ' ")');
+    }
+  }
+
+}
