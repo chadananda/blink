@@ -1,5 +1,15 @@
 ; $Id$ 
 name = Blink
 description = Manage in-text keyword links supplied by centralized feed
-package = "* KOC"
-core = 6.x
+package = "* Link Collaboration Tools"
+core = 7.x
+configure = admin/config/blink/settings
+
+files[] = blink.class.php
+files[] = blink.install
+files[] = blink.module
+files[] = blink_admin.inc
+files[] = blink_defaults.ini.php
+files[] = blink_markup.inc
+files[] = blink_markup_test.php
+files[] = blink_update.inc 

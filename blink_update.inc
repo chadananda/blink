@@ -3,10 +3,22 @@
 
 /**
  * @file
- * blink_update.inc.php
+ * blink_update.inc
  *
  * Code responsible for updating the link goals from a remote linklist server
  */
+
+if (!function_exists('db_fetch_array')) {
+  function db_fetch_array($query) {
+    if (is_object($query)) return $query->fetchAssoc();
+  }
+}
+if (!function_exists('db_value')) {
+  function db_value($query) {
+    if (is_object($query)) return $query->fetchField();
+  }
+}
+
 
 
 /*
@@ -19,11 +31,11 @@ function xmlc_blink_update_goals($server, $blink_version) {
   // get this server and test
   global $base_url;
    if (!($this_server = parse_url($base_url, PHP_URL_HOST))) return FALSE;
-    else $this_server = parse_url($base_url, PHP_URL_SCHEME) .'://'. $this_server;
+    else $this_server = parse_url($base_url, PHP_URL_SCHEME) . '://' . $this_server;
   if (!valid_url($this_server)) return FALSE;
   // get email and test
   if (!valid_email_address($email = variable_get('site_mail', ''))) return FALSE; // what if site_mail is invalid?
-  include_once(drupal_get_path('module', 'blink') .'/blink_admin.inc.php');
+  include_once(drupal_get_path('module', 'blink') . '/blink_admin.inc');
    if (!$server_url = blink_get_server_RPC_url($server['server'])) return FALSE;
 
   // if no uniqid, create one -- is this really necessary?  
@@ -42,7 +54,8 @@ function xmlc_blink_update_goals($server, $blink_version) {
   $response = (array) xmlrpc($server_url, 'linklistMaintainer.getLinklist', $this_server, $email, $server['server_key'], $blink_version, $link_instances);
 
   if ($error = xmlrpc_error()) {
-    drupal_set_message("Remote site gave an error: {$error->message} ({$error->code})");
+    drupal_set_message(t("Remote site gave an error: @msg (@code)"),
+       array('@msg' => $error->message, '@code' => $error->code));
     return;
   }
 
@@ -56,7 +69,8 @@ function xmlc_blink_update_goals($server, $blink_version) {
       // set status to 'successful_update'
       $server['status'] = 'successful_update';
       $server['last_successful_update'] = time();
-    } else $server['status'] = 'failed_update';
+    } 
+    else $server['status'] = 'failed_update';
   }
  
   // update last_updated even if we received no response
@@ -72,7 +86,7 @@ function blink_update_goals($linklist, $server) {
   $old_goals = array();
 
   // get all old goals in goal_uid keyed array for fast lookup
-  $ret = db_query('SELECT * FROM {blink_goals} WHERE blsid="%d"', $server['blsid']);
+  $ret = db_query('SELECT * FROM {blink_goals} WHERE blsid=:blsid', array(':blsid' => $server['blsid']));
   while ($goal = db_fetch_array($ret)) $old_goals[$goal['goal_uid']] = $goal;
   
  // drupal_set_message("Linklist: <pre>". print_r($linklist, TRUE) ."</pre>");
@@ -114,7 +128,7 @@ function blink_update_goals($linklist, $server) {
 }
 
 function blink_update_all_goal_localweights() {
-  drupal_set_message("Updating all localweight values");
+  drupal_set_message(t("Updating all localweight values"));
   $scary_sql = "UPDATE {blink_goals} g,
              ( SELECT g1.blsid,  g1.server_weight / g2.sum_weight sv_weight
                FROM {blink_servers} g1,
@@ -134,7 +148,7 @@ function blink_update_all_goal_localweights() {
         WHERE g.blsid = gl.blsid
         AND   g.gid =  gl.gid
         AND   g.blsid = svr.blsid";
-   if (!db_query($scary_sql)) drupal_set_message("Localweight query failed!", 'warning');
+   if (!db_query($scary_sql)) drupal_set_message(t("Localweight query failed!"), 'warning');
    return;
   /* gee, I hate to throw away elegant code... even when one has the opportunity to break MVC by stuffing logic in SQL...
   // gather up list of all servers
@@ -176,7 +190,7 @@ function blink_update_all_goal_localweights() {
  * Gather link instances for updating remote server or omit blisd for local links
  */ 
 function blink_fetch_link_instances($blsid=0) {
-  $ret = db_query('SELECT * FROM {blink_links} bll, {blink_goals} blg WHERE blsid=%d AND blg.gid = bll.gid', $blsid);
+  $ret = db_query('SELECT * FROM {blink_links} bll, {blink_goals} blg WHERE blsid=:blsid AND blg.gid = bll.gid', array(':blsid' => $blsid));
   while ($link = db_fetch_array($ret)) {
     $links[$link['link_uid']] = array(
       'link_uid'    => $link['link_uid'],

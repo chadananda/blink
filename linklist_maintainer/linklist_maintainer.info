@@ -2,4 +2,8 @@
 name = Linklist Maintainer
 description = Allows administrators to maintain lists of link targets to which other sites can subscribe
 package =  * Link Collaboration Tools
-core = 6.x
+core = 7.x
+files[] = linklist_maintainer.admin.inc
+files[] = linklist_maintainer.install
+files[] = linklist_maintainer.module
+files[] = tests/linklist_maintainer.test

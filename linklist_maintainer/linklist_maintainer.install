@@ -1,15 +1,16 @@
 <?php
-// $Id$ 
+// $Id$
 
 /**
- * @file 
+ * @file
  */
 
 /**
- * Implementation of hook_install() 
+ * Implements hook_install() ().
  */
 function linklist_maintainer_install() {
-  $result = drupal_install_schema('linklist_maintainer');
+  // TODO The drupal_(un)install_schema functions are called automatically in D7.
+  $result = array()/*drupal_install_schema('linklist_maintainer')*/;
   foreach ($result as $key => $try) {
     $key++;
     $total = count($result);
@@ -21,10 +22,11 @@ function linklist_maintainer_install() {
 }
 
 /**
- * Implementation of hook_uninstall() 
+ * Implements hook_uninstall() ().
  */
 function linklist_maintainer_uninstall() {
-  $success = drupal_uninstall_schema('linklist_maintainer');
+  // TODO The drupal_(un)install_schema functions are called automatically in D7.
+  $success = array()/*drupal_uninstall_schema('linklist_maintainer')*/;
   if ($success) {
     drupal_set_message(st('Linklist maintainer tables successfully removed'));
   }
@@ -32,7 +34,7 @@ function linklist_maintainer_uninstall() {
 }
 
 /**
- * Implementation of hook_schema()
+ * Implements hook_schema().
  */
 function linklist_maintainer_schema() {
 

@@ -1,30 +1,43 @@
 <?php
-// $Id$ 
+// $Id$
 
 /**
- * @file 
+ * @file
  */
 
 /**
- * Implementation of hook_help() 
+ * Implements hook_help() ().
  */
 function linklist_maintainer_help($path, $arg) {
 
 }
 
 /**
- * Implementation of hook_perm()
+ * Implements hook_permission().
  */
-function linklist_maintainer_perm() {
-  return array('administer linklist', 'administer linklist participants', 'view linklist reports');
+function linklist_maintainer_permission() {
+  return array(
+    'administer linklist' => array(
+      'title' => t('administer linklist'),
+      'description' => t('TODO Add a description for \'administer linklist\''),
+    ),
+    'administer linklist participants' => array(
+      'title' => t('administer linklist participants'),
+      'description' => t('TODO Add a description for \'administer linklist participants\''),
+    ),
+    'view linklist reports' => array(
+      'title' => t('view linklist reports'),
+      'description' => t('TODO Add a description for \'view linklist reports\''),
+    ),
+  );
 }
 
 /**
- * Implementation of hook_menu()
+ * Implements hook_menu().
  */
 function linklist_maintainer_menu() {
   $items = array();
-  $items['admin/settings/linklist-maintainer'] = array(
+  $items['admin/config/linklist-maintainer'] = array(
     'title' => 'Linklist',
     'description' => 'Linklist maintenance settings and reports',
     'page callback' => 'drupal_get_form',
@@ -34,13 +47,13 @@ function linklist_maintainer_menu() {
     'file' => 'linklist_maintainer.admin.inc',
     'type' => MENU_NORMAL_ITEM,
   );
-  $items['admin/settings/linklist-maintainer/linklist'] = array(
+  $items['admin/config/linklist-maintainer/linklist'] = array(
     'title' => 'Links',
     'description' => 'Administration of linklist items',
     'type' => MENU_DEFAULT_LOCAL_TASK,
     'weight' => -10,
   );
-  $items['admin/settings/linklist-maintainer/participants'] = array(
+  $items['admin/config/linklist-maintainer/participants'] = array(
     'title' => 'Participants',
     'description' => 'Administer linklist participants',
     'page callback' => 'drupal_get_form',
@@ -51,7 +64,7 @@ function linklist_maintainer_menu() {
     'type' => MENU_LOCAL_TASK,
     'weight' => 0,
   );
-  $items['admin/settings/linklist-maintainer/link/edit'] = array(
+  $items['admin/config/linklist-maintainer/link/edit'] = array(
     'title' => 'Edit link',
     'description' => 'Edit a single linklist link',
     'page callback' => 'drupal_get_form',
@@ -60,7 +73,7 @@ function linklist_maintainer_menu() {
     'file' => 'linklist_maintainer.admin.inc',
     'type' => MENU_CALLBACK,
   );
-  $items['admin/settings/linklist-maintainer/link/details'] = array(
+  $items['admin/config/linklist-maintainer/link/details'] = array(
     'title' => 'Link details',
     'description' => 'Details for a single linklist link',
     'page callback' => 'drupal_get_form',
@@ -70,7 +83,7 @@ function linklist_maintainer_menu() {
     'file' => 'linklist_maintainer.admin.inc',
     'type' => MENU_CALLBACK,
   );
-  $items['admin/settings/linklist-maintainer/participant/details'] = array(
+  $items['admin/config/linklist-maintainer/participant/details'] = array(
     'title' => 'Participant details',
     'description' => 'View statistics for a single participant',
     'page callback' => 'drupal_get_form',
@@ -80,7 +93,7 @@ function linklist_maintainer_menu() {
     'file' => 'linklist_maintainer.admin.inc',
     'type' => MENU_CALLBACK,
   );
-  $items['admin/settings/linklist-maintainer/targets'] = array(
+  $items['admin/config/linklist-maintainer/targets'] = array(
     'title' => 'Link targets',
     'description' => 'View statistics for a target page',
     'page callback' => 'drupal_get_form',
@@ -94,35 +107,35 @@ function linklist_maintainer_menu() {
 }
 
 /**
- * Implementation of hook_theme()
+ * Implements hook_theme().
  */
 function linklist_maintainer_theme($existing, $type, $theme, $path) {
   return array(
     'linklist_maintainer_admin_linklist_form' => array(
-      'arguments' => array('form' => NULL),
+      'render element' => 'form',
       'file' => 'linklist_maintainer.admin.inc'
     ),
     'linklist_maintainer_admin_link_form' => array(
-      'arguments' => array('form' => NULL),
+      'render element' => 'form',
       'file' => 'linklist_maintainer.admin.inc'
     ),
     'linklist_maintainer_admin_participants_form' => array(
-      'arguments' => array('form' => NULL),
+      'render element' => 'form',
       'file' => 'linklist_maintainer.admin.inc'
     ),
     'linklist_maintainer_admin_participant_details' => array(
-      'arguments' => array('form' => NULL),
+      'render element' => 'form',
       'file' => 'linklist_maintainer.admin.inc'
     ),
     'linklist_maintainer_admin_link_target_report' => array(
-      'arguments' => array('form' => NULL),
+      'render element' => 'form',
       'file' => 'linklist_maintainer.admin.inc'
     ),
   );
 }
 
 /**
- * Implementation of hook_xmlrpc()
+ * Implements hook_xmlrpc().
  */
 function linklist_maintainer_xmlrpc() {
   $methods['linklistMaintainer.getLinklist'] = 'xmls_linklist_maintainer_get_linklist';
@@ -133,17 +146,16 @@ function xmls_linklist_maintainer_get_linklist($server, $mail, $pkey, $participa
 
   // FIRST: make sure the parameters are valid
   if (!valid_url($server, TRUE) || !valid_email_address($mail)) {
-    return xmlrpc_error(2, t('Your server failed to identify itself with a valid server url and email address.'));  // TODO: implement silent server
+    return xmlrpc_error(2, t('Your server failed to identify itself with a valid server url and email address.')); // TODO: implement silent server
   }
 
   // ASSIGN variables for $_SERVER parts
   $ip = ip_address();
   $maintainer = $_SERVER['REQUEST_URI'];
 
-// KNOWN SERVERS - IF there is a $server/$key match in the database - KNOWN SERVERS
-  if ($participant = db_fetch_object(db_query("SELECT * FROM {linklist_maintainer_participants} WHERE server = '%s' AND pkey = '%s'", $server, $pkey))) { // intentional assignment of $participant
-
-  // VALID REQUESTS FOR KNOWN SERVERS START HERE
+  // KNOWN SERVERS - IF there is a $server/$key match in the database - KNOWN SERVERS
+  if ($participant = db_fetch_object(db_query("SELECT * FROM {linklist_maintainer_participants} WHERE server = :server AND pkey = :pkey", array(':server' => $server, ':pkey' => $pkey)))) { // intentional assignment of $participant
+    // VALID REQUESTS FOR KNOWN SERVERS START HERE
     // UPDATE LINK INSTANCE STATS
     $saved_links = _linklist_maintainer_save_link_instances($participant, $links);
 
@@ -176,7 +188,7 @@ function xmls_linklist_maintainer_get_linklist($server, $mail, $pkey, $participa
         'message' => t('Received updated linklist from %maintainer', array('%maintainer' => $maintainer)),
         'saved_links' => $saved_links,
       );
-      $participant->updated = time();
+      $participant->updated = REQUEST_TIME;
     }
 
     drupal_write_record('linklist_maintainer_participants', $participant, 'pid');
@@ -184,7 +196,7 @@ function xmls_linklist_maintainer_get_linklist($server, $mail, $pkey, $participa
 
   }
 
-// NEW SERVERS - IF there is no $server/$key match in the database - NEW SERVERS
+  // NEW SERVERS - IF there is no $server/$key match in the database - NEW SERVERS
   else {
 
     // check that the IP address is valid for the requesting server
@@ -199,32 +211,32 @@ function xmls_linklist_maintainer_get_linklist($server, $mail, $pkey, $participa
       $saveip = $ip;
     }
 
-  // VALID REQUESTS FOR NEW SERVERS START HERE
-      $participant = array(
+    // VALID REQUESTS FOR NEW SERVERS START HERE
+    $participant = array(
         'server' => $server,
         'pkey' => $pkey,
         'email' => $mail,
         'ip' => $saveip,
-        'pdate' => time(),
+        'pdate' => REQUEST_TIME,
       );
 
-      drupal_write_record('linklist_maintainer_participants', $participant); // TODO: implement silent server
-      if (db_result(db_query("SELECT pid FROM {linklist_maintainer_participants} WHERE server = '%s' AND pkey = '%s'", $participant['server'], $participant['pkey']))) {
-        return (object) array(
+    drupal_write_record('linklist_maintainer_participants', $participant); // TODO: implement silent server
+    if (db_query("SELECT pid FROM {linklist_maintainer_participants} WHERE server = :server AND pkey = :pkey", array(':server' => $participant['server'], ':pkey' => $participant['pkey']))->fetchField()) {
+      return (object) array(
           'server' => $maintainer,
           'message' => t('Your request to %maintainer is awaiting administrator approval.', array('%maintainer' => $maintainer)),
           'code' => 1,
         ); // TODO: implement silent server
-      }
-      else {
-        return xmlrpc_error(9, t('The server at %maintainer failed to save your data.', array('%maintainer' => $maintainer))); // TODO: implement silent server
-      }
+    }
+    else {
+      return xmlrpc_error(9, t('The server at %maintainer failed to save your data.', array('%maintainer' => $maintainer))); // TODO: implement silent server
+    }
   }
 }
 
 function _linklist_maintainer_save_link_instances($participant, $links = array()) {
   if (count($links)) {
-    $q = db_query("SELECT * FROM {linklist_maintainer_stats} WHERE pid = %d", $participant->pid);
+    $q = db_query("SELECT * FROM {linklist_maintainer_stats} WHERE pid = :pid", array(':pid' => $participant->pid));
     $existing_links = array();
     while ($r = db_fetch_array($q)) {
       $existing_links[$r['link_uid']] = $r;
@@ -245,7 +257,7 @@ function _linklist_maintainer_save_link_instances($participant, $links = array()
       }
       else { // if the link is new
         $new[] = $link;
-        $link['lid'] = db_result(db_query("SELECT lid FROM {linklist_maintainer_goals} WHERE goal_uid = '%s'", $link['goal_uid']));
+        $link['lid'] = db_query("SELECT lid FROM {linklist_maintainer_goals} WHERE goal_uid = :goal_uid", array(':goal_uid' => $link['goal_uid']))->fetchField();
         unset($link['goal_uid']);
         $link['pid'] = $participant->pid;
         drupal_write_record('linklist_maintainer_stats', $link);
@@ -255,7 +267,11 @@ function _linklist_maintainer_save_link_instances($participant, $links = array()
 
     // for links that are no more
     foreach ($existing_links as $link_uid => $link) {
-      db_query("DELETE FROM {linklist_maintainer_stats} WHERE liid = %d", $link['liid']);
+      // TODO Please review the conversion of this statement to the D7 database API syntax.
+      /* db_query("DELETE FROM {linklist_maintainer_stats} WHERE liid = %d", $link['liid']) */
+      db_delete('linklist_maintainer_stats')
+  ->condition('liid', $link['liid'])
+  ->execute();
       $deleted[] = $link;
     }
 
@@ -268,6 +284,7 @@ function _linklist_maintainer_save_link_instances($participant, $links = array()
 
 function _linklist_maintainer_get_linklist($participant = NULL) {
   $weight = $participant->blocked ? '0' : 'adj_weight';
+  // TODO Please convert this statement to the D7 database API syntax.
   $q = db_query("SELECT goal_uid, kw, url, $weight AS weight FROM {linklist_maintainer_goals}");
   while ($r = db_fetch_array($q)) {
     $linklist[$r['goal_uid']] = $r;
@@ -285,7 +302,7 @@ function _linklist_maintainer_check_nameservers($servercheck, $mail, $ip, &$chec
   if (function_exists('dns_get_record')) {
     $record = dns_get_record($servercheck, DNS_NS, $authns, $addtl);
   }
-  foreach($authns as $ns) {
+  foreach ($authns as $ns) {
     $nses .= $ns['target'];
     if ($ns['type'] == 'NS' && in_array($ip, gethostbynamel($ns['target']))) {
       $check_ips[] = $ip;
@@ -296,21 +313,30 @@ function _linklist_maintainer_check_nameservers($servercheck, $mail, $ip, &$chec
 }
 
 function _linklist_maintainer_adjust_weights() {
-  $totalweight = db_result(db_query("SELECT SUM(weight) FROM {linklist_maintainer_goals}"));
-  $totallinks = db_result(db_query("SELECT COUNT(*) FROM {linklist_maintainer_stats} lms LEFT JOIN {linklist_maintainer_goals} lmg ON lms.lid = lmg.lid WHERE lmg.weight > 0"));
+  $totalweight = db_query("SELECT SUM(weight) FROM {linklist_maintainer_goals}")->fetchField();
+  $totallinks = db_query("SELECT COUNT(*) FROM {linklist_maintainer_stats} lms LEFT JOIN {linklist_maintainer_goals} lmg ON lms.lid = lmg.lid WHERE lmg.weight > :lmg.weight", array(':lmg.weight' => 0))->fetchField();
   db_query_temporary("SELECT lmg.lid, COUNT(lms.lid) links FROM {linklist_maintainer_goals} lmg LEFT JOIN {linklist_maintainer_stats} lms ON lmg.lid = lms.lid WHERE lmg.weight > 0 GROUP BY lmg.lid", 'temp_linklist_maintainer_weights');
-  db_query("UPDATE {linklist_maintainer_goals} lmg
-    LEFT JOIN temp_linklist_maintainer_weights tlmw ON lmg.lid = tlmw.lid
-    SET lmg.adj_weight =
-    (
-      (
-        (lmg.weight / %d)
-        /
-        ((tlmw.links / %d) + .01)
-      ) * lmg.weight
-    ) + 1
-  WHERE lmg.weight > 0", $totalweight, $totallinks);
-  db_query("UPDATE {linklist_maintainer_goals} SET adj_weight = 0 WHERE weight = 0");
+  // TODO Please convert this statement to the D7 database API syntax.
+  /* db_query("UPDATE {linklist_maintainer_goals} lmg
+   LEFT JOIN temp_linklist_maintainer_weights tlmw ON lmg.lid = tlmw.lid
+   SET lmg.adj_weight =
+   (
+   (
+   (lmg.weight / %d)
+   /
+   ((tlmw.links / %d) + .01)
+   ) * lmg.weight
+   ) + 1
+   WHERE lmg.weight > 0", $totalweight, $totallinks) */
+  NULL;
+  // TODO Please review the conversion of this statement to the D7 database API syntax.
+  /* db_query("UPDATE {linklist_maintainer_goals} SET adj_weight = 0 WHERE weight = 0") */
+  db_update('linklist_maintainer_goals')
+  ->fields(array(
+    'adj_weight' => 0,
+  ))
+  ->condition('weight', 0)
+  ->execute();
   db_query("DROP TABLE temp_linklist_maintainer_weights");
   //  $weights = db_fetch_array("SELECT MAX(weight) max, MIN(weight) min, ");
   //  variable_set('linklist_maintainer_maxweight', db_fetch_array(db_query("SELECT MAX(weight) value, kw, COUNT(lid) count, (value / %d) pct FROM {linklist_maintainer_goals}")));

@@ -1,37 +1,32 @@
 <?php
-// $Id$ 
+// $Id$
 
 /**
- * @file 
+ * @file
  */
 
 /**
- * Implementation of hook_install() 
+ * Implements hook_install() ().
  */
 function blink_install() {
-  $result = drupal_install_schema('blink');
-  foreach ($result as $key => $try) {
-    $key++;
-    $total = count($result);
-    if ($try['success']) drupal_set_message(st("Blink table $key of $total successfully installed")); 
-  }
+  // TODO The drupal_(un)install_schema functions are called automatically in D7. 
   blink_install_default_servers();
   blink_random_link_class();
   cache_clear_all(NULL, 'cache_page');
 }
 
 /**
- * Implementation of hook_uninstall() 
+ * Implements hook_uninstall() ().
  */
 function blink_uninstall() {
-  $success = drupal_uninstall_schema('blink');
-  if ($success) drupal_set_message(st('Blink tables successfully removed'));
+  // TODO The drupal_(un)install_schema functions are called automatically in D7.
+ 
   blink_varible_list(TRUE);
 }
 
 
 /**
- * Implementation of hook_schema()
+ * Implements hook_schema().
  */
 function blink_schema() {
   $schema = array();
@@ -44,13 +39,13 @@ function blink_schema() {
         'type' => 'serial',
         'unsigned' => TRUE,
         'not null' => TRUE,
-      ), 
+      ),
       'server' => array(
         'description' => "Full URL of the server's XML-RPC stub file",
         'type' => 'varchar',
         'length' => 4000,
         'not null' => TRUE,
-      ), 
+      ),
       'server_weight' => array(
         'description' => 'Relative weight assigned to links from this server',
         'type' => 'int',
@@ -86,9 +81,9 @@ function blink_schema() {
         'default' => 'unregistered',
       ),
     ),
-    'primary key' => array('blsid'), 
+    'primary key' => array('blsid'),
   );
-  
+
   $schema['blink_goals'] = array(
     'description' => 'All link goals applied to this website',
     'fields' => array(
@@ -109,7 +104,7 @@ function blink_schema() {
         'type' => 'int',
         'unsigned' => TRUE,
         'not null' => TRUE,
-        'default' => 0,        
+        'default' => 0,
       ),
       'kw' => array(
         'description' => 'Target keyword phrase to be replaced with a link',
@@ -129,7 +124,7 @@ function blink_schema() {
         'type' => 'varchar',
         'length' => 4000,
         'not null' => TRUE,
-      ), 
+      ),
       'weight' => array(
         'description' => 'Server-assigned weight of the link',
         'type' => 'int',
@@ -150,7 +145,7 @@ function blink_schema() {
         'length' => 255,
         'not null' => TRUE,
         'default' => 'linklist',
-      ),
+      ), 
       'goal_updated' => array(
         'description' => 'The date this goal was created or changed - unix timestamp',
         'type' => 'int',
@@ -213,14 +208,14 @@ function blink_schema() {
         'not null' => TRUE,
         'default' => 0
       ),
-    ),  
+    ),
     'primary key' => array('liid'),
     'indexes' => array(
       'gid' => array('gid'),
       'nid' => array('nid'),
       'lidate' => array('li_updated'),
     ),
-  ); 
+  );
   return $schema;
 }
 
@@ -229,50 +224,58 @@ function blink_schema() {
  */
 function blink_install_default_servers() {
   // create local links user
-  if (!db_result(db_query("SELECT count(*) FROM {blink_servers} WHERE server='local'"))) {
-   db_query('INSERT INTO {blink_servers} SET server="local", server_weight=1 , server_key="%s", last_attempted_update=%d, '.
-     'last_successful_update=%d, status="successful_update"', uniqid('b', TRUE), time(), time());
+  if (!db_query("SELECT count(*) FROM {blink_servers} WHERE server = :server", array(':server' => 'local'))->fetchField()) {
+    // TODO Please convert this statement to the D7 database API syntax.
+    db_query('INSERT INTO {blink_servers} SET server="local", server_weight=1 , server_key=:key, last_attempted_update=:now, ' .
+     'last_successful_update=:now, status="successful_update"', array(':key' => uniqid('b', TRUE), ':now' => REQUEST_TIME));
   }
 
   // add default servers to list
-  $file = drupal_get_path('module', 'blink') .'/blink_defaults.ini.php';
-  if (!file_exists($file)) return;
+  $file = drupal_get_path('module', 'blink') . '/blink_defaults.ini.php';
+  if (!file_exists($file)) return; 
   $ini = parse_ini_file($file, TRUE);
 
-  drupal_set_message("Adding servers, found ". count($ini['servers']) ." servers to add.");
+  drupal_set_message(t("Adding servers, found @count servers to add.", array('@count' => count($ini['servers']))));
 
   foreach ($ini['servers'] as $server => $server_weight) {
-    if (!$server) continue;
-    if (!$server_weight) $server_weight = 1;
+    if (!$server) continue; 
+    if (!$server_weight) $server_weight = 1; 
     // if not found in table then insert (the table should be empty but why not...)
-    if (!db_result(db_query('SELECT blsid FROM {blink_servers} WHERE server="%s"', $server))) {
-     $server_key = uniqid('b', TRUE);
-     if (db_query('INSERT INTO {blink_servers} SET server="%s", server_weight=%d , server_key="%s"', $server, $server_weight, $server_key))
-       drupal_set_message('Added Blink server: '. $server); 
-     /* //blink oops, drupal_write_record does not work inside hook_install
+    if (!db_query('SELECT blsid FROM {blink_servers} WHERE server = :server', array(':server' => $server))->fetchField()) {  
+       /* db_query('INSERT INTO {blink_servers} SET server="%s", server_weight=%d , server_key="%s"', $server, $server_weight, $server_key) */
        $rec = array('server' => $server, 'server_weight' => $server_weight, 'server_key' => uniqid('b', TRUE));
-       if (drupal_write_record('blink_servers', $rec)) drupal_set_message('Added Blink server: '. $server);
-        else drupal_set_message('Failed to add server: '. $server, 'warning');
-      */
+       if (drupal_write_record('blink_servers', $rec)) drupal_set_message(t('Added Blink server:  @server', array('@server' => $server)));  
+         else drupal_set_message(t('Failed to add server: @server', array('@server' => $server)), 'warning'); 
+       drupal_set_message(t('Added Blink server: @server', array('@server' => $server)));  
     }
   }
 }
 
+/**
+ * @todo Please document this function.
+ * @see http://drupal.org/node/1354
+ */
 function blink_random_link_class() {
-  // generates a random yet pronouncable word  
+  // generates a random yet pronouncable word
   $length = rand(4, 6);
-  srand((double)microtime()*1000000);
+  srand((double) microtime() * 1000000);
   $vowels = array("a", "e", "i", "o", "u");
   $cons = array("b", "c", "d", "g", "h", "j", "k", "l", "m", "n", "p", "r", "s", "t", "u", "v", "w", "tr",
     "cr", "br", "fr", "th", "dr", "ch", "ph", "wr", "st", "sp", "sw", "pr", "sl", "cl");
   $num_vowels = count($vowels);
   $num_cons = count($cons);
-  for ($i = 0; $i < $length; $i++) $result .= $cons[rand(0, $num_cons - 1)] . $vowels[rand(0, $num_vowels - 1)];
+  for ($i = 0; $i < $length; $i++) {
+    $result .= $cons[rand(0, $num_cons - 1)] . $vowels[rand(0, $num_vowels - 1)];
+  }
   variable_set('blink_link_class', substr($result, 0, $length));
   variable_set('blink_link_style', 'text-decoration:none; border-bottom:1px dashed silver; color:inherit;');
   variable_set('blink_link_style_hover', 'background:#FF9; border-bottom:1px solid;');
 }
 
+/**
+ * @todo Please document this function.
+ * @see http://drupal.org/node/1354
+ */
 function blink_varible_list($clear = FALSE) {
   $vars = array(
     // general
@@ -291,18 +294,28 @@ function blink_varible_list($clear = FALSE) {
     //server urls
     'blink_server_url_%',
     // local goals
-    'blink_local_goal_%', 
+    'blink_local_goal_%',
   );
   if ($clear) {
-    foreach ($vars as $var) db_query('DELETE FROM {variable} WHERE name LIKE "%s"', $var);
+    foreach ($vars as $var) { 
+      /* db_query('DELETE FROM {variable} WHERE name LIKE "%s"', $var) */
+      db_delete('variable')->condition('name', $var, 'LIKE')->execute();
+    }
+    // TODO Please convert this statement to the D7 database API syntax.
+    /*
     $ret = db_query('SELECT name FROM {variable} WHERE name LIKE "blink_%"');
-    while ($var = db_result($ret)) $db_vars[] = $var;
-    if ($db_vars) drupal_set_message(t('Some variables possibly not deleted:') .'<ul><li>'. implode('<li>', $db_vars) .'</ul>', 'warning');
-     else drupal_set_message(t('All Blink variables successfully deleted.'));
+    while ($var = $ret->fetchField()) $db_vars[] = $var; 
+    if ($db_vars) drupal_set_message(t('Some variables possibly not deleted:') . '<ul><li>' . implode('<li>', $db_vars) . '</ul>', 'warning');
+      else  drupal_set_message(t('All Blink variables successfully deleted.')); 
+      */
   }
   return $vars;
 }
 
+/**
+ * @todo Please document this function.
+ * @see http://drupal.org/node/1354
+ */
 function blink_update_6001() {
   $ret = array();
   $spec = array(
@@ -312,16 +325,30 @@ function blink_update_6001() {
     'not null' => TRUE,
     'default' => '',
   );
-  db_add_field($ret, 'blink_goals', 'kw_regex', $spec);
-  include_once(drupal_get_path('module', 'blink') . '/blink.class.php');
-  db_query("UPDATE {blink_goals} SET kw = REPLACE(kw, '\', '')");
+  db_add_field('blink_goals', 'kw_regex', $spec);
+  include_once('blink.class.php');
+  // TODO Please review the conversion of this statement to the D7 database API syntax.
+  /* db_query("UPDATE {blink_goals} SET kw = REPLACE(kw, '\', '')") 
+  db_update('blink_goals')
+  ->fields(array(
+    'kw' => REPLACE(kw,
+    '' '',
+    '' ')',
+  ),
+  )
+  ->execute());*/
   $q = db_query("SELECT * FROM {blink_goals}");
-  while ($r = db_fetch_array($q)) {
+  while ($r = $q->fetchAssoc()) {
     $kw_regex = blink::get_check_kw($r['kw']);
-    db_query("UPDATE {blink_goals} SET kw_regex = '%s' WHERE gid = '%s'", $kw_regex, $r['gid']);
+    // TODO Please review the conversion of this statement to the D7 database API syntax.
+    /* db_query("UPDATE {blink_goals} SET kw_regex = '%s' WHERE gid = '%s'", $kw_regex, $r['gid']) */
+    db_update('blink_goals')->fields(array('kw_regex' => $kw_regex))->condition('gid', $r['gid'])->execute();
     $i++;
   }
-  $updated = db_result(db_query("SELECT COUNT(*) FROM {blink_goals} WHERE kw_regex != ''"));
-  drupal_set_message("Blink module updated $updated of $i rows");
-  return $ret;
+  $updated = db_query("SELECT COUNT(*) FROM {blink_goals} WHERE kw_regex <> :kw_regex", array(':kw_regex' => ''))->fetchField();
+  //drupal_set_message("Blink module updated $updated of $i rows");
+  // hook_update_N() no longer returns a $ret array. Instead, return
+  // nothing or a translated string indicating the update ran successfully.
+  // See http://drupal.org/node/224333#update_sql.
+  return t('Updated the blink tables.') /* $ret */;
 }

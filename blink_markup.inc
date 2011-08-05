@@ -1,6 +1,22 @@
 <?php
 
+// $Id$
 
+/*
+ * @file
+ *
+ */
+
+if (!function_exists('db_fetch_array')) {
+  function db_fetch_array($query) {
+    if (is_object($query)) return $query->fetchAssoc();
+  }
+}
+if (!function_exists('db_value')) {
+  function db_value($query) {
+    if (is_object($query)) return $query->fetchField();
+  }
+}
  
 
 /*
@@ -18,7 +34,7 @@ function blink_filter_keywords($text, $nid, $is_teaser = FALSE) {
   //drupal_set_message("Current Links: <pre>".print_r($cur_links, true)."</pre>");
    
   // pass in the old links with max number
-  include_once(drupal_get_path('module', 'blink') .'/blink.class.php');
+  include_once(drupal_get_path('module', 'blink') . '/blink.class.php');
   $max_links = variable_get('blink_maximum_links_per_page', 6);
   if (!$nid) $max_links = 50;
   // set a link_class value if none has been chosed already
@@ -29,7 +45,7 @@ function blink_filter_keywords($text, $nid, $is_teaser = FALSE) {
   // if links back < total count, pass in again with linked links removed from all list and max being the difference
   if ($new_max = $max_links - count($markup_links)) {
     // remove curr_links from all_goals list (this is why lists are keyed by GID!!)
-    foreach ($cur_links as $gid=>$link) unset($all_goals[$gid]);
+    foreach ($cur_links as $gid => $link) unset($all_goals[$gid]);
 
     // now pass all links back to markup with reduced max_link target
     $additional_markup_links = blink::markup_text($text, $all_goals, $new_max, $link_class);
@@ -63,7 +79,7 @@ function blink_absolute_goal_url($url, $override='') {
   // switch with override url if possible
   if ($override) $url = $override;
   // add base url to link only before using (don't store base_url in database)
-  $url = strpos($url, '://') ? rtrim($url, '/') : rtrim($base_url, '/') .'/'. rtrim($url, '/');
+  $url = strpos($url, '://') ? rtrim($url, '/') : rtrim($base_url, '/') . '/' . rtrim($url, '/');
   // shortens (externalizes) URL with 301 redirect before use, safe to use on any url, even already shortened
   if (module_exists('koc')) $url = koc_shorten_url($url);
   return $url;
@@ -72,7 +88,7 @@ function blink_absolute_goal_url($url, $override='') {
  // TODO: get all the goal links and update table to populate max etc.  
 function blink_all_weighted_goals() {
   $result = array(); 
-  $ret = db_query('SELECT * FROM {blink_goals} WHERE weight > 0 AND weight_local > 0', $nid);
+  $ret = db_query('SELECT * FROM {blink_goals} WHERE weight > 0 AND weight_local > 0');
   while ($goal = db_fetch_array($ret)) {
     $url =  blink_absolute_goal_url($goal['url'], $goal['url_override']);
     $goal['url'] = $url;
@@ -84,7 +100,7 @@ function blink_all_weighted_goals() {
 function blink_current_page_links($nid) {
   $result = array();
   $nid = (int) $nid;
-  if ($nid) $ret = db_query('SELECT * FROM {blink_links} bll, {blink_goals} blg WHERE nid=%d AND blg.gid = bll.gid', $nid);
+  if ($nid) $ret = db_query('SELECT * FROM {blink_links} bll, {blink_goals} blg WHERE nid=:nid AND blg.gid = bll.gid', array(':nid' => $nid));
   while ($link = db_fetch_array($ret)) {
     $link['url'] = blink_absolute_goal_url($link['url'], $link['url_override']);
     $result[$link['gid']] = $link;
@@ -103,7 +119,8 @@ function blink_update_page_links($nid, $new_links) {
   if (count($old_links)) {
     foreach ($old_links as $old) {
       if (!in_array($old['gid'], $new_gids)) {
-        db_query('DELETE FROM {blink_links} WHERE liid=%d', $old['liid']);
+        //db_query('DELETE FROM {blink_links} WHERE liid=:liid', array(':liid' => $old['liid']));
+        db_delete('blink_links')->condition('liid', $old['liid'])->execute();
       }
     }
   }
@@ -120,7 +137,7 @@ function blink_update_page_links($nid, $new_links) {
     // otherwise, create or update the record
     $new['nid'] = $nid;
     $new['link_uid'] = $new['link_uid'] ? $new['link_uid'] : uniqid('L', TRUE);
-    $new['page'] = $new['page'] ? $new['page'] : url('node/'. $nid, array('absolute'=>TRUE));
+    $new['page'] = $new['page'] ? $new['page'] : url('node/' . $nid, array('absolute' => TRUE));
     $liid_key = (int)$new['liid'] ? array('liid') : NULL;
     drupal_write_record('blink_links', $new, $liid_key); // update or insert
   } 

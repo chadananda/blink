@@ -1,133 +1,177 @@
 <?php
-// $Id$ 
+// $Id$
 
 /**
  * @file
  * Blink client linking module
  *
- * Blink provides an interface with API (both local and XML-RPC) for managing local 
+ * Blink provides an interface with API (both local and XML-RPC) for managing local
  * keyword links inserted into body text.
  * This provides a foundation for integrating with a local or remotely maintained link building
  * campaign
  */
- 
-define(BLINK_VERSION, '1.1d');
+
+define('BLINK_VERSION', '1.1d');
+
+if (!function_exists('db_fetch_array')) {
+  function db_fetch_array($query) {
+    if (is_object($query)) return $query->fetchAssoc();
+  }
+}
+if (!function_exists('db_value')) {
+  function db_value($query) {
+    if (is_object($query)) return $query->fetchField();
+  }
+}
 
 
 /**
- * Implementation of hook_help() 
+ * Implements hook_help() ().
  */
 function blink_help($path, $arg) {
   switch ($path) {
     case 'admin/help#blink':
-      $output = '<p>'. t('The <em>Blink</em> module provides random keyword linking using a weighted distribution.') .'</p>';
+      $output = '<p>' . t('The <em>Blink</em> module provides random keyword linking using a weighted distribution.') . '</p>';
       return $output;
   }
 }
 
 /**
- * Implementation of hook_menu()
+ * Implements hook_menu().
  */
-function blink_menu() { 
-  $items['admin/settings/blink'] = array(
-    'title' => t('Blink'),
-    'description' => t('Blink Link Manager'),
+function blink_menu() {
+  $items['admin/config/blink'] = array(
+    'title' => 'Blink',
+    'description' => 'Blink Link Manager',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('blink_admin_settings_form', NULL),
     'access callback' => 'user_access',
-    'file' => 'blink_admin.inc.php',
+    'file' => 'blink_admin.inc',
     'access arguments' => array('administer site configuration'),
   );
-  $items['admin/settings/blink/settings'] = array( 
-    'title' => t('Settings'),
-    'description' => t('Link Settings'),
+  $items['admin/config/blink/settings'] = array(
+    'title' => 'Settings',
+    'description' => 'Link Settings',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('blink_admin_settings_form', NULL),
     'access callback' => 'user_access',
     'access arguments' => array('administer site configuration'),
-    'file' => 'blink_admin.inc.php',
-     'type'     => MENU_LOCAL_TASK,
-     'weight' => -10,
+    'file' => 'blink_admin.inc',
+    'type'     => MENU_LOCAL_TASK,
+    'weight' => -10,
   );
-  $items['admin/settings/blink/report'] = array(
-    'title' => t('Report'),
-    'description' => t('Links Report'),
+  $items['admin/config/blink/report'] = array(
+    'title' => 'Report',
+    'description' => 'Links Report',
     'page callback' => 'blink_link_report',
     'access callback' => 'user_access',
     'access arguments' => array('administer site configuration'),
-    'file' => 'blink_admin.inc.php',
-     'type'     => MENU_LOCAL_TASK,
-     'weight' => -5,
+    'file' => 'blink_admin.inc',
+    'type'     => MENU_LOCAL_TASK,
+    'weight' => -5,
   );
-  $items['admin/settings/blink/update'] = array(
-    'title' => t('Request Update'),
-    'description' => t('Request Update Now'),
+  /*
+  $items['admin/config/blink/update'] = array(
+    'title' => 'Request Update',
+    'description' => 'Request Update Now',
     'page callback' => 'blink_force_update_now',
     'access callback' => 'user_access',
     'access arguments' => array('administer site configuration'),
-    'file' => 'blink_admin.inc.php',
-     'type'     => MENU_LOCAL_TASK,
-     'weight' => -5,
-  );
- return $items;
+    'file' => 'blink_admin.inc',
+    'type'     => MENU_LOCAL_TASK,
+    'weight' => -5,
+  ); */
+  return $items;
 }
 
 /**
- * Implementation of hook_cron()
+ * Implements hook_cron().
  */
 function blink_cron() {
-  
- // check for goal updates via XML-RPC 
- blink_check_updates_crontask(); // cron tasks must be self-metered
+
+  // check for goal updates via XML-RPC
+  blink_check_updates_crontask(); // cron tasks must be self-metered
 }
 
 /**
- * Implementation of hook_block() 
+ * Implements hook_block_info().
  */
-function blink_block($op='list', $delta=0, $edit=array()) {
-  switch ($op) {
-    case 'list':
+function blink_block_info() { }
 
-    case 'view':
+/**
+ * Implements hook_block_view().
+ */
+function blink_block_view($delta) { }
 
-    case 'configure':
+/**
+ * Implements hook_block_configure().
+ */
+function blink_block_configure($delta) { }
 
-    case 'save':
+/**
+ * Implements hook_block_save().
+ */
+function blink_block_save($delta, $edit) { }
 
+/**
+ * Implements hook_block() ().
+ */
+function blink_block_OLD($op = 'list', $delta = 0, $edit = array()) { }
+
+/**
+ * Implements hook_node_delete().
+ */
+function blink_node_delete($node) { 
+  /* db_query("DELETE FROM {blink_links} WHERE nid = %d", $node->nid) */
+  db_delete('blink_links')->condition('nid', $node->nid)->execute();
+}
+
+/**
+ * Implements hook_node_update().
+ */
+function blink_node_update($node) {
+  cache_clear_all("blink_page_{$node->nid}", 'cache_page');
+}
+
+/**
+ * Implements hook_node_view().
+ */
+function blink_node_view($node, $view_mode = 'full') {
+  include_once('blink_markup.inc');
+  if (blink_node_selected_for_markup($node)) {
+    if ($css_file = variable_get('blink_link_css_filepath', '')) {
+      drupal_add_css($css_file);
+    }
   }
 }
 
 /**
- * Implementation of hook_nodeapi()
+ * Implements hook_node_build_alter().
+ */
+function blink_node_build_alter($build) {
+  include_once('blink_markup.inc');
+  if (blink_node_selected_for_markup($node)) {
+    if ($body = blink_filter_keywords($node->body, $node->nid)) {
+      $node->body = $body;
+    }
+    if ($teaser = blink_filter_keywords($node->teaser, $node->nid, TRUE)) {
+      $node->teaser = $teaser;
+    }
+  }
+}
+
+/**
+ * Implements hook_nodeapi().
  *
  * We're providing the markup filter here since we need node context
  */
-function blink_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
+function blink_nodeapi_OLD(&$node, $op, $a3 = NULL, $a4 = NULL) {
+  // TODO Remaining code in this function needs to be moved to the appropriate new hook function.
   // cache_clear_all("blink_page_{$node->nid}", 'cache_page');  for testing ONLY.
-  switch ($op) {
-    case 'delete':
-      db_query("DELETE FROM {blink_links} WHERE nid = %d", $node->nid);
-    case 'update':
-      cache_clear_all("blink_page_{$node->nid}", 'cache_page');
-      break;
-    case 'view':
-      include_once(drupal_get_path('module', 'blink') .'/blink_markup.inc.php');
-      if (blink_node_selected_for_markup($node)) {
-        if ($css_file = variable_get('blink_link_css_filepath', '')) drupal_add_css($css_file);
-      }
-     break;
-    case 'alter':
-      include_once(drupal_get_path('module', 'blink') .'/blink_markup.inc.php');
-      if (blink_node_selected_for_markup($node)) {
-        if ($body = blink_filter_keywords($node->body, $node->nid)) $node->body = $body;
-        if ($teaser = blink_filter_keywords($node->teaser, $node->nid, TRUE)) $node->teaser = $teaser;
-      }
-     break;
-  }
 }
 
-function _blink_text_markup($text, $nid=0) {
-  include_once(drupal_get_path('module', 'blink') .'/blink_markup.inc.php');
+function _blink_text_markup($text, $nid = 0) {
+  include_once('blink_markup.inc');
   return blink_filter_keywords($text, $nid, TRUE);
 }
 
@@ -137,6 +181,10 @@ function _blink_text_markup($text, $nid=0) {
  * Unregistered XML-RPC update: 4 hours
  * Registred XML-RPC update: 2 days
  */
+/**
+ * @todo Please document this function.
+ * @see http://drupal.org/node/1354
+ */
 function blink_check_updates_crontask() {
   if (variable_get('blink_last_check_updates', 0) < strtotime('1 hour ago')) {
     $servers = db_query("SELECT * FROM {blink_servers}");
@@ -145,58 +193,77 @@ function blink_check_updates_crontask() {
       switch ($server['status']) {
         case 'unregistered':
           $do_update = (strtotime('5 minutes ago') > $server['last_updated']);
-        break;
-        case 'pending_approval': 
+          break;
+        case 'pending_approval':
           $do_update = (strtotime('2 hours ago') > $server['last_updated']);
-        break;
+          break;
         case 'successful_update':
           $do_update = (strtotime('2 days ago') > $server['last_updated']);
-        break;
+          break;
         case 'failed_update':
           $do_update = (strtotime('6 hours ago') > $server['last_updated']);
-        break;  
+          break;
       }
       if ($do_update) {
-        include_once(drupal_get_path('module', 'blink') .'/blink_update.inc.php');
+        include_once('blink_update.inc');
         xmlc_blink_update_goals($server, BLINK_VERSION);
       }
     }
-    variable_set('blink_last_check_updates', time());
+    variable_set('blink_last_check_updates', REQUEST_TIME);
   }
 }
 
 /*
  *  BLINK API - for external modules adding and removing goals
- */ 
- 
+ */
+
+/**
+ * @todo Please document this function.
+ * @see http://drupal.org/node/1354
+ */
 function blink_get_keyword_goals($goal_source) {
- if ($query = db_query('SELECT * FROM {blink_goals} WHERE goal_source="%s"', $goal_source)) {
-   while($row = db_fetch_array($query)) $result[] = $row;
-   return $result; 
- } else return array(); 
+  $result = array();
+  if ($query = db_query('SELECT * FROM {blink_goals} WHERE goal_source = :goal_source', array(':goal_source' => $goal_source))) {
+    while ($row = db_fetch_array($query)) $result[] = $row; 
+  } 
+  return $result;
 }
 
+/**
+ * @todo Please document this function.
+ * @see http://drupal.org/node/1354
+ */
 function blink_delete_keyword_goal($goal, $goal_source) {
-  db_query('DELETE FROM {blink_goals} WHERE gid=%d AND goal_source="%s"', $goal['gid'], $goal_source); 
+  // TODO Please review the conversion of this statement to the D7 database API syntax.
+  /* db_query('DELETE FROM {blink_goals} WHERE gid=%d AND goal_source="%s"', $goal['gid'], $goal_source) */
+  db_delete('blink_goals')->condition('gid', $goal['gid'])->condition('goal_source', $goal_source)->execute();
 }
 
+/**
+ * @todo Please document this function.
+ * @see http://drupal.org/node/1354
+ */
 function blink_update_keyword_goal($goal, $goal_source) {
   drupal_write_record('blink_goals', $goal, 'gid');
 }
 
+/**
+ * @todo Please document this function.
+ * @see http://drupal.org/node/1354
+ */
 function blink_add_keyword_goal($phrase, $page, $weight, $goal_source) {
-  if (!(int) $weight || !trim($phrase) || !trim($page) || !trim($goal_source)) return FALSE; 
+  if (!(int) $weight || !trim($phrase) || !trim($page) || !trim($goal_source))  return FALSE; 
   $goal['kw'] = trim($phrase);
-  $goal['url'] = is_integer($page) ? url('node/'.$page, array('absolute'=>TRUE)) : $page;
+  $goal['url'] = is_integer($page) ? url('node/' . $page, array('absolute' => TRUE)) : $page;
   $goal['weight'] = (int) $weight;
-  $goal['blsid'] = $blsid ? $blsid : db_result(db_query('SELECT blsid FROM {blink_servers} WHERE server="local"'));
-  
-  // finally, add or update the modified record 
-  $goal['url'] = trim(url($goal['url'], array('absolute')),'/');  
-  $goal['goal_updated'] = time();
-  $goal['goal_source'] = $goal_source;  
-  $goal['goal_uid'] = uniqid('G', TRUE);  
-  
-  // where is local weight calculated?  
-  drupal_write_record('blink_goals', $goal);  
+  $goal['blsid'] = $blsid ? $blsid : db_query('SELECT blsid FROM {blink_servers} WHERE server = :server', array(':server' => "local"))->fetchField();
+
+  // finally, add or update the modified record
+  $goal['url'] = trim(url($goal['url'], array('absolute')), '/');
+  $goal['goal_updated'] = REQUEST_TIME;
+  $goal['goal_source'] = $goal_source;
+  $goal['goal_uid'] = uniqid('b', TRUE);
+
+  // where is local weight calculated?
+  drupal_write_record('blink_goals', $goal);
 }
