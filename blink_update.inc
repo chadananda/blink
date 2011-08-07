@@ -144,7 +144,7 @@ function blink_update_all_goal_localweights() {
                 GROUP BY blsid) g2
                 WHERE g1.blsid = g2.blsid
               ) gl
-        SET   weight_local = svr.sv_weight * gl.goal_weight * 1000
+        SET   weight_local = round(svr.sv_weight * gl.goal_weight * 1000)+1
         WHERE g.blsid = gl.blsid
         AND   g.gid =  gl.gid
         AND   g.blsid = svr.blsid";

@@ -22,43 +22,30 @@ if (!function_exists('db_value')) {
 /*
  *  These will be pushed off into an include file 
  */ 
-function blink_filter_keywords($text, $nid, $is_teaser = FALSE) {
-  // drupal_set_message('Applying filter to node: '. $nid);
- 
+function blink_filter_keywords($text, $nid, $record_links = FALSE) {  
+  if (!$text) return;
+  if (!$nid) $record_links = FALSE;
   //  all links, adjust weighting as appropriate.
   $all_goals = blink_all_weighted_goals(); // should return a list indexed by GID so that we can remove items
-  $cur_links = blink_current_page_links($nid); // this list is indexed by GID also
-  $markup_links = array();
-
-  // drupal_set_message("All Links: <pre>".print_r($all_goals, true)."</pre>");
-  //drupal_set_message("Current Links: <pre>".print_r($cur_links, true)."</pre>");
-   
+  $cur_links = $record_links ? blink_current_page_links($nid) : array();
+  $markup_links = array();   
   // pass in the old links with max number
   include_once(drupal_get_path('module', 'blink') . '/blink.class.php');
   $max_links = variable_get('blink_maximum_links_per_page', 6);
-  if (!$nid) $max_links = 50;
-  // set a link_class value if none has been chosed already
+  if (!$nid) $max_links = 50; // ?? really? 
   $link_class = variable_get('blink_link_class', '');
-  if (count($cur_links)) $markup_links = blink::markup_text($text, $cur_links, $max_links, $link_class); 
-  // drupal_set_message("Markup Links: <pre>".print_r($markup_links, true)."</pre>");
-
+  if (count($cur_links)) $markup_links = blink::markup_text($text, $cur_links, $max_links, $link_class);  
   // if links back < total count, pass in again with linked links removed from all list and max being the difference
   if ($new_max = $max_links - count($markup_links)) {
     // remove curr_links from all_goals list (this is why lists are keyed by GID!!)
-    foreach ($cur_links as $gid => $link) unset($all_goals[$gid]);
-
+    foreach ($cur_links as $gid => $link) unset($all_goals[$gid]); 
     // now pass all links back to markup with reduced max_link target
     $additional_markup_links = blink::markup_text($text, $all_goals, $new_max, $link_class);
     // merge new links
     $markup_links = array_merge($markup_links, $additional_markup_links);
-  }
-
+  }  
   // update stored links and add link style if this is not a teaser
-  if (!$is_teaser) {
-    blink_update_page_links($nid, $markup_links);
-    // $text = blink_link_style() . $text; // replace with file based solution
-  }
-  
+  if ($record_links) blink_update_page_links($nid, $markup_links);    
   // return processed result with  link style
   return $text;
 }

@@ -32,9 +32,11 @@ class blink {
   // ),)
 
  function get_check_kw($kw) {
+  //echo "kw: $kw <br>";
    $kw = preg_replace('#([\\\^\$\.\|\?\+\*\(\)\[\'])#', '\\\\$1', $kw);
    $kw = preg_replace('#^(\w)#', '\b\1', $kw);
    $kw = preg_replace('#(\w)$#', '\1\b', $kw);
+   //echo "get_check_kw: $kw <br>";
    return $kw;
  }
 
@@ -44,20 +46,27 @@ class blink {
  //  so a keyword weighted 10 will get twice the links as a 
  //  keyword weighted 5 (if all keywords are equally available).
  function markup_text(&$text, $links, $maxlinks=5, $class='', $style='') { 
+ 
+ //echo "text: ".strlen($text).",maxlinks: $maxlinks, class: $class, style: $style, links: ". count($links) ."<br>";
+ //exit;
   
-     // cleanup a couple fields for Blink goals
-   foreach ($links as $key=>$link) {
+   // cleanup a couple fields for Blink goals
+ /*  foreach ($links as $key=>$link) {
      if ($link['local_weight']) $links[$key]['weight'] = $link['local_weight'];
-     //if ($link['page']) $links[$key]['url'] = $link['page'];
-   } 
+     $links[$key]['kw_regex'] = $link['kw_regex'] ? $link['kw_regex'] : self::get_check_kw($link['kw']); 
+   } */
+   
+// echo "<pre>". print_r($links, TRUE) . "</pre>";
 
    // loop through and gather all hit points
-   foreach ($links as $link){
-     // if hit exists, store to potential_links list
-     $kw = $link['kw_regex'] ? $link['kw_regex'] : self::get_check_kw($link['kw']);
-     $regex = '\'(?!((<.*?)|(<a.*?)))('. $kw . ')(?!(([^<>]*?)>)|([^>]*?</a>))\'si';
-
-       if (preg_match_all($regex, $text, $matches,  PREG_OFFSET_CAPTURE, 0)) {
+   foreach ($links as $key=>$link){
+     // cleanup a couple fields
+     if ($link['local_weight']) $link['weight'] = $link['local_weight'];
+     $link['kw_regex'] = $link['kw_regex'] ? $link['kw_regex'] : self::get_check_kw($link['kw']);  
+   
+     // if hit exists, store to potential_links list 
+     $regex = '\'(?!((<.*?)|(<a.*?)))('. $link['kw_regex'] . ')(?!(([^<>]*?)>)|([^>]*?</a>))\'si'; 
+     if (preg_match_all($regex, $text, $matches,  PREG_OFFSET_CAPTURE, 0)) {
          foreach ($matches[0] as $match) {
           $link['positions'][] = $match[1]; // record potential links
           $link['phrases'][] = $match[0]; // sometimes phrase will difer from keyword !!!
@@ -67,8 +76,11 @@ class blink {
          $link['phrases'] = array_reverse($link['phrases']); 
          
          $potential_links[] = $link;
-       }
      }
+   }
+     
+  // echo "potential_links: <pre>". print_r($potential_links, TRUE) ."</pre>";
+ // exit;
  
    // choose which links to use with randomized weighted distribution
    $new_links = array();  
@@ -161,19 +173,7 @@ class blink {
   echo   "<p style='font-style:italic; color:gray'> ". count($new_links) ." matches </p>";
   echo   $text; 
   echo  '<pre> '. print_r($new_links, TRUE) .'</pre>';
-  echo '</div>'; 
- /* 
-  $maxlinks = 4;
-  $class = 'test_class';
-  $text = $test_text; 
-  $new_links = self::markup_text($text, $links, $maxlinks, $class);
-  echo '<div style="border: 1px dashed gray; margin: 20px; padding:20px; padding-top:0">';
-  echo   "<h3> markup_text(\$text, \$links, \$maxlinks={$maxlinks}, \$class='{$class}') </h3>";
-  echo   "<p style='font-style:italic; color:gray'> ". count($new_links) ." matches </p>";
-  echo   $text; 
-  echo  '<pre> '. print_r($new_links, TRUE) .'</pre>';
-  echo '</div>';
-  */
+  echo '</div>';  
  }
  
  

@@ -19,5 +19,9 @@ table.blink_local_goals, table.blink_servers {width:100%}
 ul.goals li {list-style-position: outside !important; padding:0 !important; padding-left:20px !important; margin-left:0px !important;}
 
 table.blink_local_goals div.form-item input.form-text {
-  width: 65px;
+ /* width: 365px;*/
+}
+
+table.blink_local_goals td {
+  /*padding:0 !important;*/
 }

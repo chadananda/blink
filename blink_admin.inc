@@ -125,7 +125,7 @@ function blink_force_update_now() {
 }
 
 function blink_admin_settings_form() {  
-  drupal_add_css(drupal_get_path('module', 'blink') . '/blink_form.css', 'module', 'all', FALSE);
+  drupal_add_css(drupal_get_path('module', 'blink') . '/blink_form.css');
   drupal_add_js(drupal_get_path('module', 'blink') . '/blink_form.js');  
   $stopwatch = new StopWatch();   
   
@@ -313,10 +313,14 @@ function blink_form_local_links(&$form) {
 function blink_local_form_add_goal_group(&$form, $group, $group_name, $total_count=0) {  
   if (!$group_name) return;
   
+  // variable_set("kwgoals_blink_readonly", TRUE);  
+  $read_only = variable_get("{$group_name}_blink_readonly", FALSE);
+  if (!$read_only) $title = t('@group_name (@count goals)', array('@group_name' => $group_name, '@count' => count($group)));
+   else $title = t('@group_name (@count goals, read only)', array('@group_name' => $group_name, '@count' => count($group)));
   // Local Links 
   $form['local_goals'][$group_name]  = array(
     '#type'         => 'fieldset',
-    '#title'        => $group_name,
+    '#title'        => $title,
     '#collapsible'  => TRUE,
     '#collapsed'    => ($group_name!='blink'),  
   ); 
@@ -324,11 +328,8 @@ function blink_local_form_add_goal_group(&$form, $group, $group_name, $total_cou
   if (!count($group)) {
     $form['local_goals'][$group_name]['markup_local_goals_table'] = array('#markup' => t('No Keywords from this goal source'));
     return; 
-  }
-
+  } 
   
-  // variable_set("kwgoals_blink_readonly", TRUE);  
-  $read_only = variable_get("{$group_name}_blink_readonly", FALSE);
   if ($read_only) { 
     foreach ($group as $goal) { 
       $rows[] = array( 
@@ -344,10 +345,10 @@ function blink_local_form_add_goal_group(&$form, $group, $group_name, $total_cou
       'attributes' => array(),
       'caption' => NULL,
       'colgroups' => NULL,
-       'sticky' => NULL, 
+      'sticky' => NULL, 
     );
     $table = theme_table($table_data);
-   // $table.= "<pre>". print_r($rows, true) ."</pre>";
+    // $table.= "<pre>". print_r($rows, true) ."</pre>";
      
     $form['local_goals'][$group_name]['markup_local_goals_table'] = array('#markup' => $table); 
   }
@@ -396,7 +397,7 @@ function blink_local_form_add_goal_field(&$form, $num=0, $goal='', $group_name='
     '#description' =>  t(''),
     '#required' => FALSE,
     '#default_value' => $goal['kw'],
-    '#size' => 15,
+    '#size' => 20,
     '#prefix' => '<td>' . $goal['kw'],
     '#suffix' => '</td>',
   );
@@ -406,7 +407,7 @@ function blink_local_form_add_goal_field(&$form, $num=0, $goal='', $group_name='
     '#description' =>  t(''),
     '#required' => FALSE,
     '#default_value' => $goal['url'],
-    '#size' => 35,
+    '#size' => 40,
     '#prefix' => '<td>' . l($goal['url'], $goal['url'], array('attributes' => array('target' => '_blank'))),
     '#suffix' => '</td>',
   );
@@ -561,7 +562,7 @@ function blink_admin_settings_submit($form, &$form_state) {
     $old_weight = db_query("SELECT server_weight FROM {blink_servers} WHERE server='local'")->fetchField();
     if ($local_weight != $old_weight) {
       drupal_set_message(t("Updated local goals weight")); 
-      db_update('blink_servers')->fields(array('server_weight', $local_weight))->condition('server', 'local')->execute();
+      db_update('blink_servers')->fields(array('server_weight' => $local_weight))->condition('server', 'local')->execute();
     }
     unset($form_state['values']["blink_local_links_weight"]);
   }    
@@ -701,7 +702,7 @@ function blink_admin_settings_submit($form, &$form_state) {
 
   // settings changes will result in invalidating page caches
   cache_clear_all(NULL, 'cache_page');
-drupal_set_message('blink_admin_settings_submit 5: ' . $stopwatch->elapsed());
+  //drupal_set_message('blink_admin_settings_submit 5: ' . $stopwatch->elapsed());
 }
 
 function blink_clear_all_server_form_fields(&$form_state) {
@@ -794,7 +795,7 @@ function blink_get_server_RPC_url($server_name) {
 
 function blink_rebuild_css($class, $style, $hover) {
   if (!$class) return;
-  $file = file_directory_path() . '/' . check_plain($class) . '.css';
+  $file = drupal_realpath('public://') . '/' . check_plain($class) . '.css';
   $public = 'public://' . check_plain($class) . '.css'; 
   $data = " \n    a.{$class} {{$style}} \n    a.{$class}:hover {{$hover}} \n ";
   file_save_data($data, $public, FILE_EXISTS_REPLACE);

@@ -148,17 +148,17 @@ function blink_node_view($node, $view_mode = 'full') {
 /**
  * Implements hook_node_build_alter().
  */
-function blink_node_build_alter($build) {
-  include_once('blink_markup.inc');
+function blink_node_build_alter($build) { 
   if (blink_node_selected_for_markup($node)) {
-    if ($body = blink_filter_keywords($node->body, $node->nid)) {
+    if ($body = blink_markup_text($node->body, $node->nid, TRUE)) {
       $node->body = $body;
     }
-    if ($teaser = blink_filter_keywords($node->teaser, $node->nid, TRUE)) {
+    if ($teaser = blink_markup_text($node->teaser, $node->nid)) {
       $node->teaser = $teaser;
     }
   }
 }
+ 
 
 /**
  * Implements hook_nodeapi().
@@ -170,10 +170,7 @@ function blink_nodeapi_OLD(&$node, $op, $a3 = NULL, $a4 = NULL) {
   // cache_clear_all("blink_page_{$node->nid}", 'cache_page');  for testing ONLY.
 }
 
-function _blink_text_markup($text, $nid = 0) {
-  include_once('blink_markup.inc');
-  return blink_filter_keywords($text, $nid, TRUE);
-}
+
 
 /*
  * Loop through servers and check for updates if sufficient time has elapsed
@@ -266,4 +263,9 @@ function blink_add_keyword_goal($phrase, $page, $weight, $goal_source) {
 
   // where is local weight calculated?
   drupal_write_record('blink_goals', $goal);
+}
+
+function blink_markup_text($text, $nid = 0, $record_links = FALSE) {
+  include_once('blink_markup.inc');
+  return blink_filter_keywords($text, $nid, $record_links);
 }
