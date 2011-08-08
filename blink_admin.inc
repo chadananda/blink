@@ -271,6 +271,8 @@ function blink_form_page_selections(&$form) {
 }
  
 function blink_form_local_links(&$form) {
+  variable_set("blink_blink_description", t('These are manually-added local links which allow you to force higher weighted keywords into the blink system.'));
+  variable_set("blink_blink_weight", -10); // this group first
   // list of local links plus an extra to add a new link
   // ***************************************************************
   // list of local goals, ordered by weight
@@ -293,9 +295,15 @@ function blink_form_local_links(&$form) {
    
   foreach ($goals as $key => $goal) $goals[$key]['num'] = $key; // store the num with each 
   foreach ($goals as $goal) $goal_groups[$goal['goal_source']][] = $goal;
-  //drupal_set_message('Goals: <pre>'. print_r($goal_groups, TRUE) . "</pre>");
-  //if (!$goal_groups) return;
+  //drupal_set_message('Goals: <pre>'. print_r($goal_groups, TRUE) . "</pre>"); 
   
+   if ($goal_groups) foreach ($goal_groups as $group_name => $group) {
+     blink_local_form_add_goal_group($form, $group, $group_name, $total_count);  
+     if ($group_name!='blink') $blink_links_found = TRUE;
+   }
+   if (!$blink_links_found) blink_local_form_add_goal_group($form, '', 'blink', $total_count); 
+   
+  /*
   // first, display Blink local links plus an add row (since blink links can be added manually)
   if ($goal_groups) foreach ($goal_groups as $group_name => $group) if ($group_name=='blink') {
      blink_local_form_add_goal_group($form, $group, 'blink', $total_count);
@@ -307,22 +315,25 @@ function blink_form_local_links(&$form) {
   
   // now display any other groups of links
   if ($goal_groups) foreach ($goal_groups as $group_name => $group) if ($group_name!='blink') blink_local_form_add_goal_group($form, $group, $group_name, $total_count);   
-
+  */
 }
 
 function blink_local_form_add_goal_group(&$form, $group, $group_name, $total_count=0) {  
   if (!$group_name) return;
   
   // variable_set("kwgoals_blink_readonly", TRUE);  
-  $read_only = variable_get("{$group_name}_blink_readonly", FALSE);
-  if (!$read_only) $title = t('@group_name (@count goals)', array('@group_name' => $group_name, '@count' => count($group)));
-   else $title = t('@group_name (@count goals, read only)', array('@group_name' => $group_name, '@count' => count($group)));
+  $read_only = variable_get("{$group_name}_blink_readonly", FALSE);  
+   
   // Local Links 
   $form['local_goals'][$group_name]  = array(
     '#type'         => 'fieldset',
-    '#title'        => $title,
+    '#title'        => t('@group_name (@count goals@read_only)', array(
+      '@group_name' => $group_name, '@count' => count($group), '@read_only' => $read_only ? ', read only' : '')
+    ),
+    '#description'  => variable_get("{$group_name}_blink_description", ''),
     '#collapsible'  => TRUE,
     '#collapsed'    => ($group_name!='blink'),  
+    '#weight'       => variable_get("{$group_name}_blink_weight", 0),
   ); 
    
   if (!count($group)) {
@@ -372,8 +383,8 @@ function blink_local_form_add_goal_group(&$form, $group, $group_name, $total_cou
 
 function blink_local_form_add_goal_field(&$form, $num=0, $goal='', $group_name='blink') {
   $exists = is_array($goal); 
-  $weight = $goal['weight'] ? $goal['weight'] : 1;
-  $blsid  = $goal['blsid']; 
+  $weight = isset($goal['weight']) ? $goal['weight'] : 1;
+  $blsid  = isset($goal['blsid']) ? $goal['blsid'] : 0; 
   if (!$exists) $connect_image = '<img src="/' . drupal_get_path('module', 'blink') . '/add.png' . '" title="Add new server" width="16" />'; 
  
   $form['local_goals'][$group_name]["markup_field_servers_row_{$num}"] = array(
@@ -799,7 +810,7 @@ function blink_rebuild_css($class, $style, $hover) {
   $public = 'public://' . check_plain($class) . '.css'; 
   $data = " \n    a.{$class} {{$style}} \n    a.{$class}:hover {{$hover}} \n ";
   file_save_data($data, $public, FILE_EXISTS_REPLACE);
-  variable_set('blink_link_css_filepath', $file);
+  variable_set('blink_link_css_filepath', $public);
 }
 
  

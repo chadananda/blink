@@ -22,6 +22,6 @@ table.blink_local_goals div.form-item input.form-text {
  /* width: 365px;*/
 }
 
-table.blink_local_goals td {
-  /*padding:0 !important;*/
+div.fieldset-wrapper div.fieldset-description {
+  margin-top:0; margin-bottom:10px; font-style: italic;
 }

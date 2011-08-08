@@ -40,7 +40,7 @@ function blink_help($path, $arg) {
  * Implements hook_menu().
  */
 function blink_menu() {
-  $items['admin/config/blink'] = array(
+  $items['admin/config/development/blink'] = array(
     'title' => 'Blink',
     'description' => 'Blink Link Manager',
     'page callback' => 'drupal_get_form',
@@ -48,8 +48,9 @@ function blink_menu() {
     'access callback' => 'user_access',
     'file' => 'blink_admin.inc',
     'access arguments' => array('administer site configuration'),
+    'weight' => -20,
   );
-  $items['admin/config/blink/settings'] = array(
+  $items['admin/config/development/blink/settings'] = array(
     'title' => 'Settings',
     'description' => 'Link Settings',
     'page callback' => 'drupal_get_form',
@@ -60,7 +61,7 @@ function blink_menu() {
     'type'     => MENU_LOCAL_TASK,
     'weight' => -10,
   );
-  $items['admin/config/blink/report'] = array(
+  $items['admin/config/development/blink/report'] = array(
     'title' => 'Report',
     'description' => 'Links Report',
     'page callback' => 'blink_link_report',
@@ -140,7 +141,7 @@ function blink_node_view($node, $view_mode = 'full') {
   include_once('blink_markup.inc');
   if (blink_node_selected_for_markup($node)) {
     if ($css_file = variable_get('blink_link_css_filepath', '')) {
-      drupal_add_css($css_file);
+      drupal_add_css($css_file, 'file');
     }
   }
 }
