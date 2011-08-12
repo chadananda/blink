@@ -12,8 +12,8 @@ if (!function_exists('db_fetch_array')) {
     if (is_object($query)) return $query->fetchAssoc();
   }
 }
-if (!function_exists('db_value')) {
-  function db_value($query) {
+if (!function_exists('db_result')) {
+  function db_result($query) {
     if (is_object($query)) return $query->fetchField();
   }
 }
@@ -26,7 +26,7 @@ function blink_filter_keywords($text, $nid, $record_links = FALSE) {
   if (!$text) return;
   if (!$nid) $record_links = FALSE;
   //  all links, adjust weighting as appropriate.
-  $all_goals = blink_all_weighted_goals(); // should return a list indexed by GID so that we can remove items
+  $all_goals = blink_weighted_goals(); // should return a list indexed by GID so that we can remove items
   $cur_links = $record_links ? blink_current_page_links($nid) : array();
   $markup_links = array();   
   // pass in the old links with max number
@@ -73,14 +73,26 @@ function blink_absolute_goal_url($url, $override='') {
 }
  
  // TODO: get all the goal links and update table to populate max etc.  
-function blink_all_weighted_goals() {
+function blink_weighted_goals($count=1000, $url='') {
+  //drupal_set_message("blink_weighted_goals(\$count:$count, \$url:$url)");
+  
   $result = array(); 
-  $ret = db_query('SELECT * FROM {blink_goals} WHERE weight > 0 AND weight_local > 0');
-  while ($goal = db_fetch_array($ret)) {
-    $url =  blink_absolute_goal_url($goal['url'], $goal['url_override']);
-    $goal['url'] = $url;
+  if ($url) {
+     $query = db_query_range('SELECT * FROM {blink_goals} WHERE weight>0 AND weight_local>0 AND url=:url'.
+     ' ORDER BY weight_local DESC',
+      1, $count, array(':url' => $url)); 
+  } else {
+    $query = db_query_range('SELECT * FROM {blink_goals} WHERE weight>0 AND weight_local>0'.
+     ' ORDER BY weight_local DESC', 1, $count); 
+  } 
+  while ($goal = db_fetch_array($query)) {
+    $final_url =  blink_absolute_goal_url($goal['url'], $goal['url_override']);
+    $goal['url'] = $final_url;
     $result[$goal['gid']] = $goal;
   }
+  
+  //if ($url) drupal_set_message("<pre>".print_r($result, true) ."</pre>");
+  
   return $result;
 }
 
@@ -89,7 +101,7 @@ function blink_current_page_links($nid) {
   $nid = (int) $nid;
   if ($nid) $ret = db_query('SELECT * FROM {blink_links} bll, {blink_goals} blg WHERE nid=:nid AND blg.gid = bll.gid', array(':nid' => $nid));
   while ($link = db_fetch_array($ret)) {
-    $link['url'] = blink_absolute_goal_url($link['url'], $link['url_override']);
+    $link['url'] = blink_absolute_goal_url($link['url'], $link['url_override']); //??
     $result[$link['gid']] = $link;
   } 
   return $result;

@@ -40,6 +40,7 @@ function blink_help($path, $arg) {
  * Implements hook_menu().
  */
 function blink_menu() {
+ 
   $items['admin/config/development/blink'] = array(
     'title' => 'Blink',
     'description' => 'Blink Link Manager',
@@ -60,7 +61,7 @@ function blink_menu() {
     'file' => 'blink_admin.inc',
     'type'     => MENU_LOCAL_TASK,
     'weight' => -10,
-  );
+  ); 
   $items['admin/config/development/blink/report'] = array(
     'title' => 'Report',
     'description' => 'Links Report',
@@ -82,8 +83,33 @@ function blink_menu() {
     'type'     => MENU_LOCAL_TASK,
     'weight' => -5,
   ); */
+  
+  
+  $items['blink/blocks'] = array(
+    'page callback' => 'blink_block_page',
+    'access callback' => TRUE,
+    'title' => 'Blink Blocks',
+  );
+  
   return $items;
 }
+
+ 
+
+/**
+ * Simple page function to explain what the block example is about.
+ */
+function blink_block_page() {
+  $page = array(
+    '#type' => 'markup',
+    '#markup' => t('The Blink block example provides two sample blocks which demonstrate the blink linking API. The first block displays a simple link cloud of best (highest weighted) links in the system. The second displays the highest weighted links matching a particular node (for a "top search terms to this page" cloud).  To experiment with the blocks, enable and configure them on <a href="@url">the block admin page</a>.', array('@url' => url('admin/structure/block'))),
+  );
+  return $page;
+}
+
+
+
+
 
 /**
  * Implements hook_cron().
@@ -97,28 +123,194 @@ function blink_cron() {
 /**
  * Implements hook_block_info().
  */
-function blink_block_info() { }
+function blink_block_info() {  
+  $blocks['blink_top_site_links'] = array( 
+    'info' => t('Top Site Links'), 
+   'cache' => DRUPAL_CACHE_GLOBAL, // default 
+  ); 
+  $blocks['blink_top_site_links_rand'] = array( 
+    'info' => t('Randomized Top Site Links'), 
+    'cache' => DRUPAL_CACHE_PER_PAGE, // default 
+  );  
+  $blocks['blink_page_keywords'] = array( 
+    'info' => t('Top Page Keywords'), 
+    'cache' => DRUPAL_CACHE_PER_PAGE, // default
+    //'cache' => DRUPAL_NO_CACHE, // default 
+    'pages' => 'node/*',  
+  ); 
+  return $blocks;
+}
 
 /**
  * Implements hook_block_view().
  */
-function blink_block_view($delta) { }
+function blink_block_view($delta) {  
+  switch ($delta) { 
+    case 'blink_top_site_links': 
+      $kwcount = variable_get('blink_top_site_links_count', 50);
+      $minsize = variable_get('blink_top_site_links_min', 8);
+      $maxsize = variable_get('blink_top_site_links_max', 16); 
+      $block['subject'] = t('Top Site Links'); 
+      $goals = blink_top_links($kwcount, $url); 
+      if ($goals) $cloud_items = blink_goals_tagcloud($goals, $minsize, $maxsize, FALSE); 
+      if (count($cloud_items))  $block['content'] = implode(' ', $cloud_items);
+       else $block['content'] = " No Links Found ";
+      break;
+    case 'blink_top_site_links_rand':
+      $kwcount = variable_get('blink_top_site_links_rand_count', 50);
+      $minsize = variable_get('blink_top_site_links_rand_min', 8);
+      $maxsize = variable_get('blink_top_site_links_rand_max', 16); 
+      $block['subject'] = t('Top Site Links - Randomized and Page Cached'); 
+      $goals_old = blink_top_links($kwcount * 3, $url); 
+      $keys = array_keys($goals_old); 
+      shuffle($keys);
+      foreach ($keys as $key) if (count($goals) < $kwcount) $goals[] = $goals_old[$key];  
+      if ($goals) $cloud_items = blink_goals_tagcloud($goals, $minsize, $maxsize, FALSE);  
+      if (count($cloud_items))  $block['content'] = implode(' ', $cloud_items);
+       else $block['content'] = " No Links Found ";
+      break;  
+    case 'blink_page_keywords': 
+      $kwcount = variable_get('blink_page_keywords_count', 50);
+      $minsize = variable_get('blink_page_keywords_min', 8);
+      $maxsize = variable_get('blink_page_keywords_max', 16); 
+      $nid = (int) arg(1);
+      $block['subject'] = t('Top Page Search Keywords');   
+      $url = url('node/' . $nid, array('absolute' => TRUE));
+      $goals = blink_top_links($kwcount, $url); 
+      if ($goals) $cloud_items = blink_goals_tagcloud($goals, $minsize, $maxsize, TRUE); 
+      if (count($cloud_items))  $block['content'] = implode(' ', $cloud_items);
+        else $block['content'] = " No Keywords Found ";  
+      break; 
+  }
+  return $block;
+}
 
 /**
  * Implements hook_block_configure().
+ *
+ * This hook declares configuration options for blocks provided by this module.
  */
-function blink_block_configure($delta) { }
+function blink_block_configure($delta = '') { 
+  $form = array();
+  if ($delta == 'blink_top_site_links') { 
+    $form['blink_top_site_links_count'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Number of links to display'),
+      '#size' => 20,
+      '#description' => t('How many links should this block display?'),
+      '#default_value' => variable_get('blink_top_site_links_count',  50),
+    );
+    $form['blink_top_site_links_min'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Minimum Size in Pixels'),
+      '#size' => 20, 
+      '#default_value' => variable_get('blink_top_site_links_min',  10),
+    );
+    $form['blink_top_site_links_max'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Maximum Size in Pixels'),
+      '#size' => 20, 
+      '#default_value' => variable_get('blink_top_site_links_max',  24),
+    );  
+  }
+  if ($delta == 'blink_top_site_links_rand') { 
+    $form['blink_top_site_links_rand_count'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Number of links to display'),
+      '#size' => 20,
+      '#description' => t('How many links should this block display?'),
+      '#default_value' => variable_get('blink_top_site_links_rand_count',  50),
+    );
+    $form['blink_top_site_links_rand_min'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Minimum Size in Pixels'),
+      '#size' => 20, 
+      '#default_value' => variable_get('blink_top_site_links_rand_min',  10),
+    );
+    $form['blink_top_site_links_rand_max'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Maximum Size in Pixels'),
+      '#size' => 20, 
+      '#default_value' => variable_get('blink_top_site_links_rand_max',  24),
+    );  
+  }
+  if ($delta == 'blink_page_keywords') { 
+    $form['blink_page_keywords_count'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Number of links to display'),
+      '#size' => 20,
+      '#description' => t('How many links should this block display?'),
+      '#default_value' => variable_get('blink_page_keywords_count',  50),
+    );
+    $form['blink_page_keywords_min'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Minimum Size in Pixels'),
+      '#size' => 20, 
+      '#default_value' => variable_get('blink_page_keywords_min',  10),
+    );
+    $form['blink_page_keywords_max'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Maximum Size in Pixels'),
+      '#size' => 20, 
+      '#default_value' => variable_get('blink_page_keywords_max',  24),
+    );  
+  }
+  
+  return $form;
+}
 
 /**
  * Implements hook_block_save().
+ *
+ * This hook declares how the configured options for a block
+ * provided by this module are saved.
  */
-function blink_block_save($delta, $edit) { }
+function blink_block_save($delta = '', $edit = array()) {  
+  if ($delta == 'blink_top_site_links') { 
+    $kwcount = $edit['blink_top_site_links_count'];
+    if ($kwcount < 1) $kwcount = 1; if ($kwcount > 300) $kwcount = 300;
+    $min = $edit['blink_top_site_links_min'];
+    if ($min < 5) $min = 5; if ($min > 50) $min = 50;
+    $max = $edit['blink_top_site_links_max']; 
+    if ($max < 10) $max = 10; if ($max > 100) $max = 100;
+    if ($max < $min) $max = $min; 
+    variable_set('blink_top_site_links_count', $kwcount);
+    variable_set('blink_top_site_links_min', $min);
+    variable_set('blink_top_site_links_max', $max);
+  }
+  if ($delta == 'blink_top_site_links_rand') { 
+    $kwcount = $edit['blink_top_site_links_rand_count'];
+    if ($kwcount < 1) $kwcount = 1; if ($kwcount > 300) $kwcount = 300;
+    $min = $edit['blink_top_site_links_rand_min'];
+    if ($min < 5) $min = 5; if ($min > 50) $min = 50;
+    $max = $edit['blink_top_site_links_rand_max']; 
+    if ($max < 10) $max = 10; if ($max > 100) $max = 100;
+    if ($max < $min) $max = $min; 
+    variable_set('blink_top_site_links_rand_count', $kwcount);
+    variable_set('blink_top_site_links_rand_min', $min);
+    variable_set('blink_top_site_links_rand_max', $max);
+  }
+  if ($delta == 'blink_page_keywords') { 
+    $kwcount = $edit['blink_page_keywords_count'];
+    if ($kwcount < 1) $kwcount = 1; if ($kwcount > 300) $kwcount = 300;
+    $min = $edit['blink_page_keywords_min'];
+    if ($min < 5) $min = 5; if ($min > 50) $min = 50;
+    $max = $edit['blink_page_keywords_max']; 
+    if ($max < 10) $max = 10; if ($max > 100) $max = 100;
+    if ($max < $min) $max = $min; 
+    variable_set('blink_page_keywords_count', $kwcount);
+    variable_set('blink_page_keywords_min', $min);
+    variable_set('blink_page_keywords_max', $max);
+  } 
+  return;
+}
 
-/**
- * Implements hook_block() ().
- */
-function blink_block_OLD($op = 'list', $delta = 0, $edit = array()) { }
 
+
+
+
+
+ 
 /**
  * Implements hook_node_delete().
  */
@@ -128,7 +320,7 @@ function blink_node_delete($node) {
 }
 
 /**
- * Implements hook_node_update().
+ * Implements hook_node_update(). ??
  */
 function blink_node_update($node) {
   cache_clear_all("blink_page_{$node->nid}", 'cache_page');
@@ -160,18 +352,7 @@ function blink_node_build_alter($build) {
   }
 }
  
-
-/**
- * Implements hook_nodeapi().
- *
- * We're providing the markup filter here since we need node context
- */
-function blink_nodeapi_OLD(&$node, $op, $a3 = NULL, $a4 = NULL) {
-  // TODO Remaining code in this function needs to be moved to the appropriate new hook function.
-  // cache_clear_all("blink_page_{$node->nid}", 'cache_page');  for testing ONLY.
-}
-
-
+ 
 
 /*
  * Loop through servers and check for updates if sufficient time has elapsed
@@ -269,4 +450,82 @@ function blink_add_keyword_goal($phrase, $page, $weight, $goal_source) {
 function blink_markup_text($text, $nid = 0, $record_links = FALSE) {
   include_once('blink_markup.inc');
   return blink_filter_keywords($text, $nid, $record_links);
+}
+ 
+  
+ 
+function blink_top_links($count=20, $url = '') {
+  // API, wraps around internal fetch of weighted goals
+  include_once('blink_markup.inc');   
+  $goals = blink_weighted_goals($count, $url);    
+  return $goals;
+}
+
+function blink_goals_tagcloud($goals, $minpx=6, $maxpx=15, $striplinks=FALSE) {
+  // given a set of goals, returns an array of HTML items in spans with font-size between minpx and maxpx
+  if (!is_array($goals)) return;
+  foreach ($goals as $goal) { 
+    //drupal_set_message("<pre>".print_r($goal, true)."</pre>"); return;
+    $kw = $goal['kw'];
+    $tags[$kw] = $goal['weight_local']; 
+    $tagcount[$kw] = $goal['weight_local'];
+    $urls[$kw] = $goal['url'];
+  }  
+  
+  //drupal_set_message("blink_goals_tagcloud before smooth <pre>".print_r($tags, TRUE)."</pre>");
+  $tags = _blink_pare_curve($tags, $minpx, $maxpx); 
+  //drupal_set_message("blink_goals_tagcloud after smooth <pre>".print_r($tags, TRUE)."</pre>");
+    
+  foreach($tags as $kw => $newsize) {
+    if ($striplinks) {
+     $result[] = '<span class="blink_tag" style="font-size: ' . ceil($newsize) .'px" title="' . $kw . '">' . $kw . '</span>';  
+    }
+    else {
+     $result[] = l($kw, $urls[$kw], array('attributes' => array('class' => 'blink_tag', 'style' => 'font-size: ' . ceil($newsize) .'px'))); 
+    } 
+  } 
+  return $result;
+}
+
+function _blink_pare_curve($weights, $minsize, $maxsize) { 
+ // for creating a smooth tag cloud
+ // takes a set of weights and spreads them evenly over a curve from min to max
+ // should produce an even gradiation despite uneven initial distribution
+ // which prevents a few large tags and mostly unreadable tags
+ 
+  $logweights = array(); // array of log value of counts
+  $output = array(); // output array of linearized count values
+  // Convert each weight to its log value.
+  foreach ($weights AS $tagname => $w) {
+    // take each weight from input, convert to log, put into new array called logweights
+    $logweights[$tagname] = log($w);
+  }
+   
+  // MAX AND MIN OF logweights ARRAY
+  $max = max(array_values($logweights));
+  $min = min(array_values($logweights));
+
+  foreach($logweights AS $lw) {     
+    if($lw < $min) $min = $lw;    
+    if($lw > $max) $max = $lw; 
+   }
+   
+  // Now calculate the slope of a straight line, from min to max.
+  if($max > $min) $slope = ($maxsize - $minsize) / ($max - $min); 
+
+  $middle = ($minsize + $maxsize) / 2;
+
+  foreach($logweights AS $tagname => $w) {
+    if($max <= $min) {     //With max=min all tags have the same weight.     
+      $output[$tagname] = $middle;    
+    }    
+    else { // Calculate the distance from the minimum for this weight.     
+      $distance = $w - $min; //C alculate the position on the slope for this distance.      
+      $result = $slope * $distance + $minsize; // If the tag turned out too small, set minsize.         
+      if( $result < $minsize) $result = $minsize;  // If the tag turned out too big, set maxsize.     
+      if( $result > $maxsize) $result = $maxsize; 
+      $output[$tagname] = $result;
+    }
+  }
+  return $output;
 }
