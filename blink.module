@@ -82,18 +82,24 @@ function blink_menu() {
     'file' => 'blink_admin.inc',
     'type'     => MENU_LOCAL_TASK,
     'weight' => -5,
-  ); */
+  ); 
   
+   $items['admin/config/blink/update'] = array( 
+    'page callback' => 'blink_force_update_now',
+    'access callback' => 'user_access',
+    'access arguments' => array('administer site configuration'),
+    'file' => 'blink_admin.inc',
+    'type'  => MENU_CALLBACK, 
+  );*/
   
   $items['blink/blocks'] = array(
     'page callback' => 'blink_block_page',
     'access callback' => TRUE,
     'title' => 'Blink Blocks',
   );
-  
+    
   return $items;
 }
-
  
 
 /**
@@ -107,10 +113,7 @@ function blink_block_page() {
   return $page;
 }
 
-
-
-
-
+ 
 /**
  * Implements hook_cron().
  */
@@ -305,10 +308,30 @@ function blink_block_save($delta = '', $edit = array()) {
   return;
 }
 
+/**
+ * Implements hook_filter_info().
+ *
+ * Input filter for adding blink links to nodes
+ */
+function blink_filter_info() {
+  $filters = array();
+  $filters['blink_links'] = array(
+    'title'      => t('Blink Link Filter'),
+    'desription' => t('This filter will add text links to match the blink goals.'),
+    'process callback' => '_blink_markup_filter',
+  );
+  return $filters;
+}
 
-
-
-
+function _blink_markup_filter($text, $filter, $format) { 
+  if (!$nid = (int) arg(1)) return;
+  $node = node_load($nid);
+  if (blink_node_selected_for_markup($node)) { 
+    if ($css_file = variable_get('blink_link_css_filepath', '')) drupal_add_css($css_file, 'file'); 
+    if ($new_text = blink_markup_text($text, $nid, TRUE)) $text = $new_text; 
+  }
+  return $text;
+}
 
  
 /**
@@ -326,34 +349,7 @@ function blink_node_update($node) {
   cache_clear_all("blink_page_{$node->nid}", 'cache_page');
 }
 
-/**
- * Implements hook_node_view().
- */
-function blink_node_view($node, $view_mode = 'full') {
-  include_once('blink_markup.inc');
-  if (blink_node_selected_for_markup($node)) {
-    if ($css_file = variable_get('blink_link_css_filepath', '')) {
-      drupal_add_css($css_file, 'file');
-    }
-  }
-}
-
-/**
- * Implements hook_node_build_alter().
- */
-function blink_node_build_alter($build) { 
-  if (blink_node_selected_for_markup($node)) {
-    if ($body = blink_markup_text($node->body, $node->nid, TRUE)) {
-      $node->body = $body;
-    }
-    if ($teaser = blink_markup_text($node->teaser, $node->nid)) {
-      $node->teaser = $teaser;
-    }
-  }
-}
- 
- 
-
+  
 /*
  * Loop through servers and check for updates if sufficient time has elapsed
  * Each check: every hour
@@ -528,4 +524,15 @@ function _blink_pare_curve($weights, $minsize, $maxsize) {
     }
   }
   return $output;
+}
+
+// TODO: check the node against exclusion list (node types and pattern)
+function blink_node_selected_for_markup($node) {
+  $deselected_types = variable_get('blink_exclude_types', array());
+  if (is_array($deselected_types) && in_array($node->type, $deselected_types)) return FALSE;
+  
+  // TODO: return FALSE if path matches exclusion path list
+
+  //drupal_set_message("This '{$node->type}' node is being marked up");
+  return TRUE;
 }

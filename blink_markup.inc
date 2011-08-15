@@ -27,7 +27,7 @@ function blink_filter_keywords($text, $nid, $record_links = FALSE) {
   if (!$nid) $record_links = FALSE;
   //  all links, adjust weighting as appropriate.
   $all_goals = blink_weighted_goals(); // should return a list indexed by GID so that we can remove items
-  $cur_links = $record_links ? blink_current_page_links($nid) : array();
+  $cur_links = $record_links ? blink_current_page_links($nid) : array(); 
   $markup_links = array();   
   // pass in the old links with max number
   include_once(drupal_get_path('module', 'blink') . '/blink.class.php');
@@ -47,19 +47,13 @@ function blink_filter_keywords($text, $nid, $record_links = FALSE) {
   // update stored links and add link style if this is not a teaser
   if ($record_links) blink_update_page_links($nid, $markup_links);    
   // return processed result with  link style
+  
+  //echo "got here"; exit;
+  
   return $text;
 }
 
-// TODO: check the node against exclusion list (node types and pattern)
-function blink_node_selected_for_markup($node) {
-  $deselected_types = variable_get('blink_exclude_types', array());
-  if (is_array($deselected_types) && in_array($node->type, $deselected_types)) return FALSE;
-  
-  // TODO: return FALSE if path matches exclusion path list
 
-  //drupal_set_message("This '{$node->type}' node is being marked up");
-  return TRUE;
-}
  
 function blink_absolute_goal_url($url, $override='') {
   global $base_url;
@@ -86,7 +80,8 @@ function blink_weighted_goals($count=1000, $url='') {
      ' ORDER BY weight_local DESC', 1, $count); 
   } 
   while ($goal = db_fetch_array($query)) {
-    $final_url =  blink_absolute_goal_url($goal['url'], $goal['url_override']);
+    $url = isset($goal['url_override']) ?$goal['url_override'] : $goal['url'];
+    $final_url =  blink_absolute_goal_url($url);
     $goal['url'] = $final_url;
     $result[$goal['gid']] = $goal;
   }
@@ -100,8 +95,9 @@ function blink_current_page_links($nid) {
   $result = array();
   $nid = (int) $nid;
   if ($nid) $ret = db_query('SELECT * FROM {blink_links} bll, {blink_goals} blg WHERE nid=:nid AND blg.gid = bll.gid', array(':nid' => $nid));
-  while ($link = db_fetch_array($ret)) {
-    $link['url'] = blink_absolute_goal_url($link['url'], $link['url_override']); //??
+  while ($link = db_fetch_array($ret)) { 
+    $url = isset($link['url_override']) ?$link['url_override'] : $link['url'];
+    $link['url'] = $url; //??
     $result[$link['gid']] = $link;
   } 
   return $result;
@@ -115,30 +111,36 @@ function blink_update_page_links($nid, $new_links) {
   $old_links = blink_current_page_links($nid);
   $new_gids = array();
   foreach ($new_links as $link) $new_gids[] = $link['gid']; // quick index
-  if (count($old_links)) {
-    foreach ($old_links as $old) {
-      if (!in_array($old['gid'], $new_gids)) {
-        //db_query('DELETE FROM {blink_links} WHERE liid=:liid', array(':liid' => $old['liid']));
-        db_delete('blink_links')->condition('liid', $old['liid'])->execute();
-      }
+  if (count($old_links)) foreach ($old_links as $old) {
+    if (!in_array($old['gid'], $new_gids)) {
+      //db_query('DELETE FROM {blink_links} WHERE liid=:liid', array(':liid' => $old['liid']));
+      db_delete('blink_links')->condition('liid', $old['liid'])->execute();
     }
   }
     
   // insert new link instances or update the old
   if (count($new_links)) foreach ($new_links as $new) {
     // if this link instance exists and is newer than the age of its goal record then leave it alone
-    if ($new['liid'] && ($new['li_updated'] > $new['goal_updated'])) continue;
-
+    if ($new['liid'] && ($new['li_updated'] > $new['goal_updated'])) continue; 
     // this tests to see if updates are skipped correctly (when no change introduced)
-    // drupal_set_message("Updating database for link instance: '{$new['kw']}'");
-
+    //drupal_set_message("Updating database for link instance: '{$new['kw']}'"); 
+    
+    //return; 
     $new['li_updated'] = time(); 
     // otherwise, create or update the record
     $new['nid'] = $nid;
     $new['link_uid'] = $new['link_uid'] ? $new['link_uid'] : uniqid('L', TRUE);
     $new['page'] = $new['page'] ? $new['page'] : url('node/' . $nid, array('absolute' => TRUE));
-    $liid_key = (int)$new['liid'] ? array('liid') : NULL;
-    drupal_write_record('blink_links', $new, $liid_key); // update or insert
+    $liid_key = (int) $new['liid'] ? array('liid') : array();
+    
+    $link = array_intersect_key($new, array('liid'=>'','link_uid'=>'','gid'=>'','nid'=>'', 'page'=>'', 'url_override'=>'', 'li_updated'=>'')); 
+    //drupal_set_message("<pre>". print_r($link, true) ."</pre>");
+    //return;
+    if (is_array($link)) {
+       drupal_write_record('blink_links', $link, $liid_key); 
+       //drupal_set_message("Writing record: <pre>". print_r($link, true) ."</pre>");
+       // update or insert
+    }
   } 
 }
 

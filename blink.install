@@ -200,6 +200,7 @@ function blink_schema() {
         'type' => 'varchar',
         'length' => 4000,
         'not null' => TRUE,
+        'default'  => '',
       ),
       'li_updated' => array(
         'description' => 'The date this link instance became active - unix timestamp',

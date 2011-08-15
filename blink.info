@@ -3,7 +3,7 @@ name = Blink
 description = Manage in-text keyword links supplied by centralized feed
 package = "* Link Collaboration Tools"
 core = 7.x
-configure = admin/config/blink/settings
+configure = admin/config/development/blink
 
 files[] = blink.class.php
 files[] = blink.install

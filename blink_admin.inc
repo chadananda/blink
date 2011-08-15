@@ -176,7 +176,7 @@ function blink_form_remote_servers(&$form) {
     // list of remote servers, ordered by weight
   if ($ret = db_query("SELECT * FROM {blink_servers} WHERE server<>'local'")) {
     while ($server = db_fetch_array($ret)) $servers[] = $server; 
-    if ($servers) {
+    if (is_array($servers)) {
       usort($servers, 'blink_sort_by_server_weight'); 
       foreach ($servers as $key => $server) blink_server_form_add_server_field($form, $key, $server);
       // an extra, empty row to add another server
@@ -412,6 +412,8 @@ function blink_local_form_add_goal_field(&$form, $num=0, $goal='', $group_name='
     '#prefix' => '<td>' . $goal['kw'],
     '#suffix' => '</td>',
   );
+  
+  if (isset($goal['url'])) $link = l($goal['url'], $goal['url'], array('attributes' => array('target' => '_blank')));
   $form['local_goals'][$group_name]["blink_local_goal_url_{$num}"] = array(
     '#type' =>  $exists ? 'hidden' : 'textfield',
     '#title' => t(''),
@@ -419,7 +421,7 @@ function blink_local_form_add_goal_field(&$form, $num=0, $goal='', $group_name='
     '#required' => FALSE,
     '#default_value' => $goal['url'],
     '#size' => 40,
-    '#prefix' => '<td>' . l($goal['url'], $goal['url'], array('attributes' => array('target' => '_blank'))),
+    '#prefix' => '<td>' . $link,
     '#suffix' => '</td>',
   );
 
@@ -610,8 +612,13 @@ function blink_admin_settings_submit($form, &$form_state) {
     $rec->server_weight = (int) $form_state['values']["blink_server_weight_{$i}"] ? (int) $form_state['values']["blink_server_weight_{$i}"] : 1;
     $rec->blsid = $form_state['values']["blink_server_blsid_{$i}"] ? $form_state['values']["blink_server_blsid_{$i}"] : NULL;
     $rec->server_key = $rec->server_key ? $rec->server_key : uniqid('b', TRUE);
-    $blsid_key = $rec->blsid ? array('blsid') : NULL;
-    drupal_write_record('blink_servers', $rec, $blsid_key);
+    $blsid_key = $rec->blsid ? array('blsid') : array();
+    
+    if (is_array($rec)) {
+      drupal_set_message("Writing record: <pre>". print_r($rec, true) ."</pre>");
+      drupal_write_record('blink_servers', $rec, $blsid_key);
+      
+    }
     blink_clear_server_form_field($form_state, $i); // no point saving these
   } 
   blink_clear_all_server_form_fields($form_state); // just to be sure these are not saved by system settings submit
@@ -665,21 +672,25 @@ function blink_admin_settings_submit($form, &$form_state) {
         continue;        
       }
       
-      // finally, add or update the modified record
-      $goal['gid'] = $old ? $old['gid'] : 0; // if no gid, use old gid if exists 
+      // finally, add or update the modified record 
       $goal['url'] = $old ? $goal['url'] : url($goal['url'], array('absolute')); 
        $goal['url'] = trim($goal['url'], '/');
       $goal['blsid'] = $local_blsid;
       $goal['goal_updated'] = time();
-      $goal['goal_source'] = 'blink'; 
-      $goal['gid'] = $old ? $old['gid'] : 0;
+      $goal['goal_source'] = 'blink';  
       $goal['goal_uid'] = $old ? $old['goal_uid'] : uniqid('G', TRUE);
-      $gid_key = $goal['gid'] ? array('gid') : NULL;
+      $gid_key = $old ? 'gid' : array();
+      if ($old) $goal['gid'] = $old; else unset($goal['gid']);
       // if ($remove_checked) drupal_set_message("Removing local goal: <pre>". print_r($goal, TRUE) . "</pre>");  
       if ($old) drupal_set_message(t("Updated local goal weight: @kw -> @weight",
          array('@kw' => $goal['kw'], '@weight' => $goal['weight'])));
         else drupal_set_message(t("Added new local goal: @kw -> @url", array('@kw' => $goal['kw'], '@url' => $goal['url'])));
-      drupal_write_record('blink_goals', $goal, $gid_key); 
+        
+        
+      if (is_array($goal)) { 
+        drupal_set_message("Writing goal: <pre>". print_r($goal, true) ."</pre>");
+        drupal_write_record('blink_goals', $goal, $gid_key); 
+      }
     }
     blink_clear_local_goal_form_field($form_state, $i);
   }
