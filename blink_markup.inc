@@ -31,8 +31,7 @@ function blink_filter_keywords($text, $nid, $record_links = FALSE) {
   $markup_links = array();   
   // pass in the old links with max number
   include_once(drupal_get_path('module', 'blink') . '/blink.class.php');
-  $max_links = variable_get('blink_maximum_links_per_page', 6);
-  if (!$nid) $max_links = 50; // ?? really? 
+  $max_links = variable_get('blink_maximum_links_per_page', 6); 
   $link_class = variable_get('blink_link_class', '');
   if (count($cur_links)) $markup_links = blink::markup_text($text, $cur_links, $max_links, $link_class);  
   // if links back < total count, pass in again with linked links removed from all list and max being the difference
@@ -80,7 +79,7 @@ function blink_weighted_goals($count=1000, $url='') {
      ' ORDER BY weight_local DESC', 1, $count); 
   } 
   while ($goal = db_fetch_array($query)) {
-    $url = isset($goal['url_override']) ?$goal['url_override'] : $goal['url'];
+    $url = isset($goal['short_url']) ? $goal['short_url'] : $goal['url'];
     $final_url =  blink_absolute_goal_url($url);
     $goal['url'] = $final_url;
     $result[$goal['gid']] = $goal;
@@ -96,7 +95,7 @@ function blink_current_page_links($nid) {
   $nid = (int) $nid;
   if ($nid) $ret = db_query('SELECT * FROM {blink_links} bll, {blink_goals} blg WHERE nid=:nid AND blg.gid = bll.gid', array(':nid' => $nid));
   while ($link = db_fetch_array($ret)) { 
-    $url = isset($link['url_override']) ?$link['url_override'] : $link['url'];
+    $url = isset($link['url_override']) ? $link['url_override'] : $link['url'];
     $link['url'] = $url; //??
     $result[$link['gid']] = $link;
   } 
@@ -130,10 +129,12 @@ function blink_update_page_links($nid, $new_links) {
     // otherwise, create or update the record
     $new['nid'] = $nid;
     $new['link_uid'] = $new['link_uid'] ? $new['link_uid'] : uniqid('L', TRUE);
-    $new['page'] = $new['page'] ? $new['page'] : url('node/' . $nid, array('absolute' => TRUE));
-    $liid_key = (int) $new['liid'] ? array('liid') : array();
+    $new['url_override'] = $new['short_url'];
+    $new['page'] = isset($new['page']) ? $new['page'] : url('node/' . $nid, array('absolute' => TRUE));
+    $liid_key = isset($new['liid']) ? array('liid') : array();
     
-    $link = array_intersect_key($new, array('liid'=>'','link_uid'=>'','gid'=>'','nid'=>'', 'page'=>'', 'url_override'=>'', 'li_updated'=>'')); 
+    $link = array_intersect_key($new, array('liid'=>'','link_uid'=>'','gid'=>'','nid'=>'',
+     'page'=>'', 'url_override'=>'', 'li_updated'=>'')); 
     //drupal_set_message("<pre>". print_r($link, true) ."</pre>");
     //return;
     if (is_array($link)) {
@@ -144,12 +145,4 @@ function blink_update_page_links($nid, $new_links) {
   } 
 }
 
-/*
-function blink_link_style() {
-  if (($class = variable_get('blink_link_class', '')) &&($style = variable_get('blink_link_style', ''))) { 
-    $style_hover = variable_get('blink_link_style_hover', '');
-    return "<style>\n    a.{$class} {{$style}} \n    a.{$class}:hover {{$style_hover}} \n</style>";
-  }
-}
- *
- */
+ 

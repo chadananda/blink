@@ -125,6 +125,13 @@ function blink_schema() {
         'length' => 4000,
         'not null' => TRUE,
       ),
+      'short_url' => array(
+        'description' => 'Optional shortened version of URL',
+        'type' => 'varchar',
+        'length' => 255,
+        'default' => '',
+        'not null' => TRUE,
+      ),    
       'weight' => array(
         'description' => 'Server-assigned weight of the link',
         'type' => 'int',

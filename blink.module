@@ -154,7 +154,7 @@ function blink_block_view($delta) {
       $minsize = variable_get('blink_top_site_links_min', 8);
       $maxsize = variable_get('blink_top_site_links_max', 16); 
       $block['subject'] = t('Top Site Links'); 
-      $goals = blink_top_links($kwcount, $url); 
+      $goals = blink_top_links($kwcount); 
       if ($goals) $cloud_items = blink_goals_tagcloud($goals, $minsize, $maxsize, FALSE); 
       if (count($cloud_items))  $block['content'] = implode(' ', $cloud_items);
        else $block['content'] = " No Links Found ";
@@ -164,9 +164,10 @@ function blink_block_view($delta) {
       $minsize = variable_get('blink_top_site_links_rand_min', 8);
       $maxsize = variable_get('blink_top_site_links_rand_max', 16); 
       $block['subject'] = t('Top Site Links - Randomized and Page Cached'); 
-      $goals_old = blink_top_links($kwcount * 3, $url); 
+      $goals_old = blink_top_links($kwcount * 3); 
       $keys = array_keys($goals_old); 
       shuffle($keys);
+      $goals = array();
       foreach ($keys as $key) if (count($goals) < $kwcount) $goals[] = $goals_old[$key];  
       if ($goals) $cloud_items = blink_goals_tagcloud($goals, $minsize, $maxsize, FALSE);  
       if (count($cloud_items))  $block['content'] = implode(' ', $cloud_items);
@@ -185,7 +186,7 @@ function blink_block_view($delta) {
         else $block['content'] = " No Keywords Found ";  
       break; 
   }
-  return $block;
+  if (isset($block)) return $block;
 }
 
 /**
@@ -365,6 +366,7 @@ function blink_check_updates_crontask() {
     $servers = db_query("SELECT * FROM {blink_servers}");
     while ($server = db_fetch_array($servers)) {
       $do_update = FALSE;
+      if (!isset($server['last_updated'])) $server['last_updated'] = 0;
       switch ($server['status']) {
         case 'unregistered':
           $do_update = (strtotime('5 minutes ago') > $server['last_updated']);
@@ -448,8 +450,19 @@ function blink_markup_text($text, $nid = 0, $record_links = FALSE) {
   return blink_filter_keywords($text, $nid, $record_links);
 }
  
+// returns one keyword goal from the top picks 
+function blink_top_goals_random($top_range=20, $count=1, $url='') {
+  $list = blink_top_links($top_range, $url);  
+  shuffle($list);  
+  if ($count==1) return $list[0];
+  foreach ($list as $goal) {
+    $result[] = $goal;
+    if (count($result) >= $count) break;    
+  } 
+  return $result;  
+}
   
- 
+// use $url to get top links for one page, otherwise, for the site
 function blink_top_links($count=20, $url = '') {
   // API, wraps around internal fetch of weighted goals
   include_once('blink_markup.inc');   

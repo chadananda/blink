@@ -228,10 +228,10 @@ function blink_form_site_settings(&$form) {
     '#description' => t('Optional CSS style to be applied to links'),
   );
 
-  $form['site_settings']['link_class_settings']['blink_link_style_hover'] = array(
+  $form['site_settings']['link_class_settings']['blink_link_hover'] = array(
     '#type' => 'textfield',
     '#title' => t('Blink link hover style'),
-    '#default_value' => variable_get('blink_link_style_hover', 'background:#FF9; border-bottom:1px solid;'),
+    '#default_value' => variable_get('blink_link_hover', 'background:#FF9; border-bottom:1px solid;'),
     '#description' => t('Optional CSS style to be applied to links on hover'),
   );
 /**/
@@ -816,10 +816,13 @@ function blink_get_server_RPC_url($server_name) {
 }
 
 function blink_rebuild_css($class, $style, $hover) {
+  $class = check_plain($class);
   if (!$class) return;
-  $file = drupal_realpath('public://') . '/' . check_plain($class) . '.css';
-  $public = 'public://' . check_plain($class) . '.css'; 
-  $data = " \n    a.{$class} {{$style}} \n    a.{$class}:hover {{$hover}} \n ";
+  $file = drupal_realpath('public://') . '/' . $class . '.css';
+  $public = 'public://' . $class . '.css'; 
+  $data = " \n    a.{$class} {{$style}} \n  " .
+    "  a.{$class}:visited {{$style}} \n  " .
+    "  a.{$class}:hover {{$hover}} \n ";
   file_save_data($data, $public, FILE_EXISTS_REPLACE);
   variable_set('blink_link_css_filepath', $public);
 }

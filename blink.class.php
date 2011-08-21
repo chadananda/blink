@@ -61,7 +61,7 @@ class blink {
    // loop through and gather all hit points
    foreach ($links as $key=>$link){
      // cleanup a couple fields
-     if ($link['local_weight']) $link['weight'] = $link['local_weight'];
+     if (isset($link['local_weight'])) $link['weight'] = $link['local_weight'];
      $link['kw_regex'] = $link['kw_regex'] ? $link['kw_regex'] : self::get_check_kw($link['kw']);  
    
      // if hit exists, store to potential_links list 
@@ -84,7 +84,7 @@ class blink {
  
    // choose which links to use with randomized weighted distribution
    $new_links = array();  
-   while (count($potential_links) && (count($new_links) < $maxlinks)) { 
+   if (isset($potential_links)) while (count($potential_links) && (count($new_links) < $maxlinks)) { 
      // re-total link values each time
      $total_weight=0; 
      foreach ($potential_links as $link) $total_weight+= $link['weight'];   
@@ -113,8 +113,8 @@ class blink {
   usort($new_links, array('blink', 'position_cmp'));  
           
   // loop through new_links (from high to low), applying links to text
-  if ($class) $class_attr = ' class="'. trim(stripslashes($class)) .'"';
-  if ($style) $style_attr = ' style="'. trim(stripslashes($style)) .'"';
+  $class_attr = $class ? ' class="'. trim(stripslashes($class)) .'"' : '';
+  $style_attr = $style ? ' style="'. trim(stripslashes($style)) .'"' : '';
   //drupal_set_message("Style: {$style}");
   foreach ($new_links as $link) { 
    $lnk = '<a href="'. $link['url'] .'"'. $class_attr . $style_attr .'>'. $link['phrase'] .'</a>';
